@@ -5,13 +5,12 @@
 #include <map/landmark.h>
 #include <map/rig.h>
 #include <map/shot.h>
+#include <map/map.h>
 
 #include <deque>
 #include <unordered_map>
 
 namespace map {
-
-class Map;
 
 // ------------------------------------------------------
 // ShotView
