@@ -32,20 +32,47 @@ PYBIND11_MODULE(pyrobust, m) {
       .def_readwrite("use_iteration_reduction",
                      &RobustEstimatorParams::use_iteration_reduction);
 
-  m.def("ransac_line", robust::RANSACLine,
+  m.def("ransac_line",
+        [](auto&&... args) {
+            return robust::RANSACLine(std::forward<decltype(args)>(args)...);
+        },
         py::call_guard<py::gil_scoped_release>());
-  m.def("ransac_essential", robust::RANSACEssential,
+
+  m.def("ransac_essential",
+        [](auto&&... args) {
+            return robust::RANSACEssential(std::forward<decltype(args)>(args)...);
+        },
         py::call_guard<py::gil_scoped_release>());
-  m.def("ransac_relative_pose", robust::RANSACRelativePose,
+
+  m.def("ransac_relative_pose",
+        [](auto&&... args) {
+            return robust::RANSACRelativePose(std::forward<decltype(args)>(args)...);
+        },
         py::call_guard<py::gil_scoped_release>());
-  m.def("ransac_relative_rotation", robust::RANSACRelativeRotation,
+
+  m.def("ransac_relative_rotation",
+        [](auto&&... args) {
+            return robust::RANSACRelativeRotation(std::forward<decltype(args)>(args)...);
+        },
         py::call_guard<py::gil_scoped_release>());
-  m.def("ransac_absolute_pose", robust::RANSACAbsolutePose,
+
+  m.def("ransac_absolute_pose",
+        [](auto&&... args) {
+            return robust::RANSACAbsolutePose(std::forward<decltype(args)>(args)...);
+        },
         py::call_guard<py::gil_scoped_release>());
+
   m.def("ransac_absolute_pose_known_rotation",
-        robust::RANSACAbsolutePoseKnownRotation,
+        [](auto&&... args) {
+            return robust::RANSACAbsolutePoseKnownRotation(
+                std::forward<decltype(args)>(args)...);
+        },
         py::call_guard<py::gil_scoped_release>());
-  m.def("ransac_similarity", robust::RANSACSimilarity,
+
+  m.def("ransac_similarity",
+        [](auto&&... args) {
+            return robust::RANSACSimilarity(std::forward<decltype(args)>(args)...);
+        },
         py::call_guard<py::gil_scoped_release>());
 
   py::enum_<RansacType>(m, "RansacType")
