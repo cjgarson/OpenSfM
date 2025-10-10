@@ -39,8 +39,8 @@ struct RigCamera {
 };
 
 class RigInstance {
-EIGEN_MAKE_ALIGNED_OPERATOR_NEW
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   map::RigInstanceId id;
 
   RigInstance() = default;
