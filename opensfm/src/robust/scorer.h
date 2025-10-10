@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <vector>
+#include <Eigen/Core>
 
 template <class MODEL, class LOMODEL = MODEL>
 struct ScoreInfo {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   double score{0};
   std::vector<int> inliers_indices;
   MODEL model;
