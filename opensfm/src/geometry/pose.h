@@ -11,7 +11,9 @@ class Pose {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   Pose() {
-   SetFromWorldToCamera(Mat3d::Identity(), Vec3d::Zero());
+      Mat3d R = Mat3d::Identity();
+      Vec3d t = Vec3d::Zero();
+      SetFromWorldToCamera(R, t);
   }
   virtual ~Pose() = default;
 
