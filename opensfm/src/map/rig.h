@@ -4,6 +4,7 @@
 #include <geometry/camera.h>
 #include <geometry/pose.h>
 #include <map/defines.h>
+#include <Eingen/Core>
 
 #include <exception>
 #include <set>
@@ -13,6 +14,7 @@ namespace map {
 class Shot;
 
 struct RigCamera {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   enum RelativeType {
     // All instances of this rig camera have their relatives poses being held
     FIXED = 0,
