@@ -33,45 +33,59 @@ PYBIND11_MODULE(pyrobust, m) {
                      &RobustEstimatorParams::use_iteration_reduction);
 
   m.def("ransac_line",
-        [](auto&&... args) {
-            return robust::RANSACLine(std::forward<decltype(args)>(args)...);
+        [](const Eigen::MatrixXd& pts, double threshold,
+           const robust::RobustEstimatorParams& params) {
+          return robust::RANSACLine(pts, threshold, params);
         },
         py::call_guard<py::gil_scoped_release>());
 
   m.def("ransac_essential",
-        [](auto&&... args) {
-            return robust::RANSACEssential(std::forward<decltype(args)>(args)...);
+        [](const Eigen::MatrixXd& p1, const Eigen::MatrixXd& p2, double threshold,
+           const robust::RobustEstimatorParams& params, const robust::RansacType& rtype) {
+          return robust::RANSACEssential(p1, p2, threshold, params, rtype);
         },
         py::call_guard<py::gil_scoped_release>());
 
   m.def("ransac_relative_pose",
-        [](auto&&... args) {
-            return robust::RANSACRelativePose(std::forward<decltype(args)>(args)...);
+        [](const Eigen::MatrixXd& p1, const Eigen::MatrixXd& p2, double threshold,
+           const robust::RobustEstimatorParams& params, const robust::RansacType& rtype) {
+          return robust::RANSACRelativePose(p1, p2, threshold, params, rtype);
         },
         py::call_guard<py::gil_scoped_release>());
 
   m.def("ransac_relative_rotation",
-        [](auto&&... args) {
-            return robust::RANSACRelativeRotation(std::forward<decltype(args)>(args)...);
+        [](const Eigen::MatrixXd& v1, const Eigen::MatrixXd& v2, double threshold,
+           const robust::RobustEstimatorParams& params, const robust::RansacType& rtype) {
+          return robust::RANSACRelativeRotation(v1, v2, threshold, params, rtype);
         },
         py::call_guard<py::gil_scoped_release>());
 
   m.def("ransac_absolute_pose",
-        [](auto&&... args) {
-            return robust::RANSACAbsolutePose(std::forward<decltype(args)>(args)...);
+        [](const Eigen::MatrixXd& bearings,
+           const Eigen::MatrixXd& points_world,
+           double threshold,
+           const robust::RobustEstimatorParams& params,
+           const robust::RansacType& rtype) {
+          return robust::RANSACAbsolutePose(bearings, points_world, threshold, params, rtype);
         },
         py::call_guard<py::gil_scoped_release>());
 
   m.def("ransac_absolute_pose_known_rotation",
-        [](auto&&... args) {
-            return robust::RANSACAbsolutePoseKnownRotation(
-                std::forward<decltype(args)>(args)...);
+        [](const Eigen::MatrixXd& bearings,
+           const Eigen::MatrixXd& points_world,
+           const Eigen::Matrix3d& R_w_c,
+           double threshold,
+           const robust::RobustEstimatorParams& params,
+           const robust::RansacType& rtype) {
+          return robust::RANSACAbsolutePoseKnownRotation(
+              bearings, points_world, R_w_c, threshold, params, rtype);
         },
         py::call_guard<py::gil_scoped_release>());
 
   m.def("ransac_similarity",
-        [](auto&&... args) {
-            return robust::RANSACSimilarity(std::forward<decltype(args)>(args)...);
+        [](const Eigen::MatrixXd& x1, const Eigen::MatrixXd& x2, double threshold,
+           const robust::RobustEstimatorParams& params, const robust::RansacType& rtype) {
+          return robust::RANSACSimilarity(x1, x2, threshold, params, rtype);
         },
         py::call_guard<py::gil_scoped_release>());
 
