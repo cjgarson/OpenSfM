@@ -155,10 +155,11 @@ PYBIND11_MODULE(pymap, m) {
                     &map::ShotMesh::SetVertices);
 
   py::class_<map::RigCamera>(m, "RigCamera")
-      .def(py::init<>())
-      .def(py::init([](geometry::Pose pose, map::RigCameraId id) {
-          return map::RigCamera(std::move(pose), std::move(id));
-      }))
+      // No default ctor exposed: users must pass a valid Pose + id
+      .def(py::init([](const geometry::Pose& pose, map::RigCameraId id) {
+            // take Pose by const& to avoid moving Eigen storage around
+            return map::RigCamera(pose, std::move(id));
+          }))
       .def_readwrite("id", &map::RigCamera::id)
       .def_readwrite("pose", &map::RigCamera::pose)
       // pickle support
