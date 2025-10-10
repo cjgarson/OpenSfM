@@ -156,7 +156,9 @@ PYBIND11_MODULE(pymap, m) {
 
   py::class_<map::RigCamera>(m, "RigCamera")
       .def(py::init<>())
-      .def(py::init<const geometry::Pose &, const map::RigCameraId &>())
+      .def(py::init([](geometry::Pose pose, map::RigCameraId id) {
+          return map::RigCamera(std::move(pose), std::move(id));
+      }))
       .def_readwrite("id", &map::RigCamera::id)
       .def_readwrite("pose", &map::RigCamera::pose)
       // pickle support
