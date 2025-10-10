@@ -4,7 +4,7 @@
 #include <geometry/camera.h>
 #include <geometry/pose.h>
 #include <map/defines.h>
-#include <Eingen/Core>
+#include <Eigen/Core>
 
 #include <exception>
 #include <set>
