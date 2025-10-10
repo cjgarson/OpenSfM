@@ -35,7 +35,7 @@ PYBIND11_MODULE(pyrobust, m) {
   m.def("ransac_line",
         [](Eigen::Ref<const Eigen::MatrixXd> pts,
            double threshold,
-           const robust::RobustEstimatorParams& params) {
+           const RobustEstimatorParams& params) {
           return robust::RANSACLine(pts, threshold, params);
         },
         py::call_guard<py::gil_scoped_release>());
@@ -44,8 +44,8 @@ PYBIND11_MODULE(pyrobust, m) {
         [](Eigen::Ref<const Eigen::MatrixXd> p1,
            Eigen::Ref<const Eigen::MatrixXd> p2,
            double threshold,
-           const robust::RobustEstimatorParams& params,
-           const robust::RansacType& rtype) {
+           const RobustEstimatorParams& params,
+           const RansacType& rtype) {
           return robust::RANSACEssential(p1, p2, threshold, params, rtype);
         },
         py::call_guard<py::gil_scoped_release>());
@@ -54,8 +54,8 @@ PYBIND11_MODULE(pyrobust, m) {
         [](Eigen::Ref<const Eigen::MatrixXd> p1,
            Eigen::Ref<const Eigen::MatrixXd> p2,
            double threshold,
-           const robust::RobustEstimatorParams& params,
-           const robust::RansacType& rtype) {
+           const RobustEstimatorParams& params,
+           const RansacType& rtype) {
           return robust::RANSACRelativePose(p1, p2, threshold, params, rtype);
         },
         py::call_guard<py::gil_scoped_release>());
@@ -64,8 +64,8 @@ PYBIND11_MODULE(pyrobust, m) {
         [](Eigen::Ref<const Eigen::MatrixXd> v1,
            Eigen::Ref<const Eigen::MatrixXd> v2,
            double threshold,
-           const robust::RobustEstimatorParams& params,
-           const robust::RansacType& rtype) {
+           const RobustEstimatorParams& params,
+           const RansacType& rtype) {
           return robust::RANSACRelativeRotation(v1, v2, threshold, params, rtype);
         },
         py::call_guard<py::gil_scoped_release>());
@@ -74,8 +74,8 @@ PYBIND11_MODULE(pyrobust, m) {
         [](Eigen::Ref<const Eigen::MatrixXd> bearings,
            Eigen::Ref<const Eigen::MatrixXd> points_world,
            double threshold,
-           const robust::RobustEstimatorParams& params,
-           const robust::RansacType& rtype) {
+           const RobustEstimatorParams& params,
+           const RansacType& rtype) {
           return robust::RANSACAbsolutePose(bearings, points_world, threshold, params, rtype);
         },
         py::call_guard<py::gil_scoped_release>());
@@ -85,8 +85,8 @@ PYBIND11_MODULE(pyrobust, m) {
            Eigen::Ref<const Eigen::MatrixXd> points_world,
            Eigen::Ref<const Eigen::Matrix3d> R_w_c,
            double threshold,
-           const robust::RobustEstimatorParams& params,
-           const robust::RansacType& rtype) {
+           const RobustEstimatorParams& params,
+           const RansacType& rtype) {
           return robust::RANSACAbsolutePoseKnownRotation(
               bearings, points_world, R_w_c, threshold, params, rtype);
         },
@@ -96,8 +96,8 @@ PYBIND11_MODULE(pyrobust, m) {
         [](Eigen::Ref<const Eigen::MatrixXd> x1,
            Eigen::Ref<const Eigen::MatrixXd> x2,
            double threshold,
-           const robust::RobustEstimatorParams& params,
-           const robust::RansacType& rtype) {
+           const RobustEstimatorParams& params,
+           const RansacType& rtype) {
           return robust::RANSACSimilarity(x1, x2, threshold, params, rtype);
         },
         py::call_guard<py::gil_scoped_release>());
