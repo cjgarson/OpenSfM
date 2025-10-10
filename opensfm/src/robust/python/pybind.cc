@@ -7,6 +7,12 @@
 #include <robust/scorer.h>
 
 template <class T>
+inline T to_value(T&& v) { return std::forward<T>(v); }
+
+template <class T>
+inline std::remove_pointer_t<T> to_value(T* p) { return *p; }
+
+template <class T>
 void AddScoreType(py::module& m, const std::string& name) {
   py::class_<ScoreInfo<T>>(m, ("ScoreInfo" + name).c_str())
       .def(py::init())
@@ -32,12 +38,12 @@ PYBIND11_MODULE(pyrobust, m) {
       .def_readwrite("use_iteration_reduction",
                      &RobustEstimatorParams::use_iteration_reduction);
 
-m.def("ransac_line",
+ m.def("ransac_line",
         [](Eigen::Ref<const Eigen::Matrix<double, -1, 2>> pts,
            double threshold,
            const RobustEstimatorParams& params,
            const RansacType& rtype) {
-          return robust::RANSACLine(pts, threshold, params, rtype);
+          return to_value(robust::RANSACLine(pts, threshold, params, rtype));
         },
         py::call_guard<py::gil_scoped_release>());
 
@@ -47,7 +53,7 @@ m.def("ransac_line",
            double threshold,
            const RobustEstimatorParams& params,
            const RansacType& rtype) {
-          return robust::RANSACEssential(p1, p2, threshold, params, rtype);
+          return to_value(robust::RANSACEssential(p1, p2, threshold, params, rtype));
         },
         py::call_guard<py::gil_scoped_release>());
 
@@ -57,7 +63,7 @@ m.def("ransac_line",
            double threshold,
            const RobustEstimatorParams& params,
            const RansacType& rtype) {
-          return robust::RANSACRelativePose(p1, p2, threshold, params, rtype);
+          return to_value(robust::RANSACRelativePose(p1, p2, threshold, params, rtype));
         },
         py::call_guard<py::gil_scoped_release>());
 
@@ -67,7 +73,7 @@ m.def("ransac_line",
            double threshold,
            const RobustEstimatorParams& params,
            const RansacType& rtype) {
-          return robust::RANSACRelativeRotation(v1, v2, threshold, params, rtype);
+          return to_value(robust::RANSACRelativeRotation(v1, v2, threshold, params, rtype));
         },
         py::call_guard<py::gil_scoped_release>());
 
@@ -77,19 +83,19 @@ m.def("ransac_line",
            double threshold,
            const RobustEstimatorParams& params,
            const RansacType& rtype) {
-          return robust::RANSACAbsolutePose(bearings, points_world, threshold, params, rtype);
+          return to_value(robust::RANSACAbsolutePose(bearings, points_world, threshold, params, rtype));
         },
         py::call_guard<py::gil_scoped_release>());
 
-  // --- correct signature: no rotation matrix argument ---
+  // correct signature for this branch: no rotation matrix parameter
   m.def("ransac_absolute_pose_known_rotation",
         [](Eigen::Ref<const Eigen::MatrixXd> bearings,
            Eigen::Ref<const Eigen::MatrixXd> points_world,
            double threshold,
            const RobustEstimatorParams& params,
            const RansacType& rtype) {
-          return robust::RANSACAbsolutePoseKnownRotation(
-              bearings, points_world, threshold, params, rtype);
+          return to_value(robust::RANSACAbsolutePoseKnownRotation(
+              bearings, points_world, threshold, params, rtype));
         },
         py::call_guard<py::gil_scoped_release>());
 
@@ -99,7 +105,7 @@ m.def("ransac_line",
            double threshold,
            const RobustEstimatorParams& params,
            const RansacType& rtype) {
-          return robust::RANSACSimilarity(x1, x2, threshold, params, rtype);
+          return to_value(robust::RANSACSimilarity(x1, x2, threshold, params, rtype));
         },
         py::call_guard<py::gil_scoped_release>());
   
