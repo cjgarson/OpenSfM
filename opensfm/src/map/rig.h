@@ -5,6 +5,7 @@
 #include <geometry/pose.h>
 #include <map/defines.h>
 #include <Eigen/Core>
+#include <Eigen/StdVector>
 
 #include <exception>
 #include <set>
@@ -87,7 +88,13 @@ class RigInstance {
   geometry::Pose pose_;
 
   // For variable Rigs, each instance has its own copy of RigCameras
-  std::unordered_map<map::ShotId, foundation::OptionalValue<map::RigCamera>>
-      own_rig_cameras_;
+  std::unordered_map<
+      map::ShotId,
+      foundation::OptionalValue<map::RigCamera>,
+      std::hash<map::ShotId>,
+      std::equal_to<map::ShotId>,
+      Eigen::aligned_allocator<
+          std::pair<const map::ShotId,
+                    foundation::OptionalValue<map::RigCamera>>>> own_rig_cameras_;
 };
 }  // namespace map
