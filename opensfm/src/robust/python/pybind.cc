@@ -32,11 +32,12 @@ PYBIND11_MODULE(pyrobust, m) {
       .def_readwrite("use_iteration_reduction",
                      &RobustEstimatorParams::use_iteration_reduction);
 
-  m.def("ransac_line",
-        [](Eigen::Ref<const Eigen::MatrixXd> pts,
+m.def("ransac_line",
+        [](Eigen::Ref<const Eigen::Matrix<double, -1, 2>> pts,
            double threshold,
-           const RobustEstimatorParams& params) {
-          return robust::RANSACLine(pts, threshold, params);
+           const RobustEstimatorParams& params,
+           const RansacType& rtype) {
+          return robust::RANSACLine(pts, threshold, params, rtype);
         },
         py::call_guard<py::gil_scoped_release>());
 
@@ -83,12 +84,13 @@ PYBIND11_MODULE(pyrobust, m) {
   m.def("ransac_absolute_pose_known_rotation",
         [](Eigen::Ref<const Eigen::MatrixXd> bearings,
            Eigen::Ref<const Eigen::MatrixXd> points_world,
-           Eigen::Ref<const Eigen::Matrix3d> R_w_c,
            double threshold,
            const RobustEstimatorParams& params,
-           const RansacType& rtype) {
+           const RansacType& rtype,
+           Eigen::Ref<const Eigen::Matrix3d> R_w_c) {
+          // note: threshold/params/rtype BEFORE R_w_c to match this branch
           return robust::RANSACAbsolutePoseKnownRotation(
-              bearings, points_world, R_w_c, threshold, params, rtype);
+              bearings, points_world, threshold, params, rtype, R_w_c);
         },
         py::call_guard<py::gil_scoped_release>());
 
