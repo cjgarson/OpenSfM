@@ -11,20 +11,15 @@ class Pose {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   Pose() {
-    Mat4d T_cw = Mat4d::Identity();
-    SetFromWorldToCamera(T_cw);
+   SetFromWorldToCamera(Mat3d::Identity(), Vec3d::Zero());
   }
   virtual ~Pose() = default;
 
   Pose(const Vec3d& R, const Vec3d& t = Vec3d::Zero()) {
-    Mat4d T_cw = Mat4d::Identity();
     SetFromWorldToCamera(R, t);
   }
   Pose(const Mat3d& R, const Vec3d& t = Vec3d::Zero()) {
-    Mat4d T_cw = Mat4d::Identity();
-    T_cw.block<3, 3>(0, 0) = R;
-    T_cw.block<3, 1>(0, 3) = t;
-    SetFromWorldToCamera(T_cw);
+    SetFromWorldToCamera(R, t);
   }
   // Transformation Matrices
   Mat4d WorldToCamera() const { return world_to_cam_; }
