@@ -4,7 +4,7 @@
 #include <geometry/camera.h>
 #include <geometry/pose.h>
 #include <geometry/similarity.h>
-#include <map/dataviews.h>
+#include <map/map_types.h>
 #include <map/defines.h>
 #include <map/landmark.h>
 #include <map/rig.h>
