@@ -5,7 +5,7 @@
 #include <map/landmark.h>
 #include <map/rig.h>
 #include <map/shot.h>
-#include <map/map.h>
+#include <map/map_types.h>
 
 #include <deque>
 #include <unordered_map>
