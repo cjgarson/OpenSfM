@@ -1,5 +1,4 @@
 // src/sfm/src/ba_helpers.cc
-
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -8,6 +7,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include <bundle/bundle_adjuster.h>
 #include <foundation/types.h>
 #include <geometry/triangulation.h>
 
@@ -15,6 +15,7 @@
 #include <map/landmark.h>
 #include <map/map.h>
 #include <map/shot.h>
+
 #include <sfm/ba_helpers.h>
 
 namespace py = pybind11;
@@ -22,7 +23,7 @@ namespace py = pybind11;
 namespace sfm {
 
 // -----------------------------------------------------------------------------
-// Collect neighborhood IDs from pointer neighborhood
+// Neighborhood (IDs)
 // -----------------------------------------------------------------------------
 std::pair<std::unordered_set<sfmmap::ShotId>, std::unordered_set<sfmmap::ShotId>>
 BAHelpers::ShotNeighborhoodIds(sfmmap::Map& map,
@@ -31,7 +32,6 @@ BAHelpers::ShotNeighborhoodIds(sfmmap::Map& map,
                                size_t min_common_points,
                                size_t max_interior_size) {
   auto res = ShotNeighborhood(map, central_shot_id, radius, min_common_points, max_interior_size);
-
   std::unordered_set<sfmmap::ShotId> interior;
   interior.reserve(res.first.size());
   for (sfmmap::Shot* s : res.first) interior.insert(s->GetId());
@@ -44,7 +44,7 @@ BAHelpers::ShotNeighborhoodIds(sfmmap::Map& map,
 }
 
 // -----------------------------------------------------------------------------
-// Neighborhood growth around central shot
+// Neighborhood (pointers)
 // -----------------------------------------------------------------------------
 std::pair<std::unordered_set<sfmmap::Shot*>, std::unordered_set<sfmmap::Shot*>>
 BAHelpers::ShotNeighborhood(sfmmap::Map& map,
@@ -55,7 +55,7 @@ BAHelpers::ShotNeighborhood(sfmmap::Map& map,
   std::unordered_set<sfmmap::Shot*> interior;
   interior.reserve(max_interior_size);
 
-  // Map::GetShot returns Shot& in this fork; our set holds Shot*
+  // Map::GetShot returns Shot& in your fork; our set stores Shot*
   sfmmap::Shot& central = map.GetShot(central_shot_id);
   interior.insert(&central);
 
@@ -65,14 +65,14 @@ BAHelpers::ShotNeighborhood(sfmmap::Map& map,
     interior.insert(neighbors.begin(), neighbors.end());
   }
 
-  // boundary = direct neighbors (low threshold)
+  // boundary = direct neighbors with a low threshold
   auto boundary = DirectShotNeighbors(map, interior, /*min_common_points=*/1,
                                       /*max_neighbors=*/max_interior_size * 3);
   return {std::move(interior), std::move(boundary)};
 }
 
 // -----------------------------------------------------------------------------
-// Direct neighbors by shared landmarks
+// Direct neighbors
 // -----------------------------------------------------------------------------
 std::unordered_set<sfmmap::Shot*>
 BAHelpers::DirectShotNeighbors(sfmmap::Map& /*map*/,
@@ -82,7 +82,9 @@ BAHelpers::DirectShotNeighbors(sfmmap::Map& /*map*/,
   std::unordered_set<sfmmap::Landmark*> points;
   for (auto* shot : shot_ids) {
     // map<Landmark*, Observation>
-    for (const auto& kv : shot->GetLandmarkObservations()) points.insert(kv.first);
+    for (const auto& kv : shot->GetLandmarkObservations()) {
+      points.insert(kv.first);
+    }
   }
 
   std::unordered_map<sfmmap::Shot*, size_t> common_points;
@@ -90,7 +92,9 @@ BAHelpers::DirectShotNeighbors(sfmmap::Map& /*map*/,
     // map<Shot*, FeatureId>
     for (const auto& obs : lm->GetObservations()) {
       auto* nshot = obs.first;
-      if (shot_ids.find(nshot) == shot_ids.end()) ++common_points[nshot];
+      if (shot_ids.find(nshot) == shot_ids.end()) {
+        ++common_points[nshot];
+      }
     }
   }
 
@@ -111,12 +115,12 @@ BAHelpers::DirectShotNeighbors(sfmmap::Map& /*map*/,
 }
 
 // -----------------------------------------------------------------------------
-// BundleLocal — match header: const refs for priors and GCP
+// BundleLocal  (MATCHES HEADER EXACTLY: const AlignedVector<...>& gcp)
 // -----------------------------------------------------------------------------
 py::tuple BAHelpers::BundleLocal(
     sfmmap::Map& map,
-    const sfmmap::CameraMap& camera_priors,
-    const sfmmap::RigCameraMap& rig_camera_priors,
+    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
+    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
     const AlignedVector<sfmmap::GroundControlPoint>& gcp,
     const sfmmap::ShotId& central_shot_id,
     const py::dict& config) {
@@ -139,22 +143,23 @@ py::tuple BAHelpers::BundleLocal(
   report["num_camera_priors"]      = static_cast<int>(camera_priors.size());
   report["num_rig_camera_priors"]  = static_cast<int>(rig_camera_priors.size());
 
+  // Return central shot id (your original returns a tuple; keep that contract)
   return py::make_tuple(py::cast(central_shot_id), report);
 }
 
 // -----------------------------------------------------------------------------
-// TriangulateGCP — use Map::ShotMap typedef, bearings + centers, 5-arg API
+// TriangulateGCP  (MATCHES HEADER: Map::ShotMap; uses 5-arg midpoint API)
 // -----------------------------------------------------------------------------
 bool BAHelpers::TriangulateGCP(
     const sfmmap::GroundControlPoint& point,
     const sfmmap::Map::ShotMap& shots,
     Vec3d& coordinates) {
 
-  const auto& obs = point.observations_;  // this fork uses observations_ (public)
+  const auto& obs = point.observations_;  // public in your fork
   if (obs.size() < 2) return false;
 
-  MatX3d bearings;
-  MatX3d centers;
+  MatX3d bearings;   // unit vectors in world
+  MatX3d centers;    // camera centers in world
   bearings.resize(obs.size(), 3);
   centers.resize(obs.size(), 3);
 
@@ -162,14 +167,14 @@ bool BAHelpers::TriangulateGCP(
   for (const auto& o : obs) {
     auto it = shots.find(o.shot_id_);
     if (it == shots.end()) continue;
+
     const sfmmap::Shot& shot = it->second;
+    const Eigen::Vector3d b_cam = shot.GetCamera()->Bearing(o.projection_);
+    const auto* pose = shot.GetPose();
+    const Eigen::Vector3d b_world = pose->RotationCameraToWorld() * b_cam;
 
-    // Bearing(projection) exists in this fork; pose is pointer
-    const Eigen::Vector3d b = shot.Bearing(o.projection_);
-    const Eigen::Vector3d c = shot.GetPose()->GetOrigin();
-
-    bearings.row(i) = b;
-    centers.row(i)  = c;
+    bearings.row(i) = b_world;
+    centers.row(i)  = pose->GetOrigin();
     ++i;
   }
 
@@ -178,43 +183,44 @@ bool BAHelpers::TriangulateGCP(
   bearings.conservativeResize(i, Eigen::NoChange);
   centers.conservativeResize(i, Eigen::NoChange);
 
-  // 5-arg midpoint API in your fork:
-  // TriangulateBearingsMidpoint(bearings, centers, weights, min_angle, max_angle)
-  std::vector<double> weights(i, 1.0);
-  // Reasonable angle bounds (in radians)
-  const double min_angle = 0.1 * M_PI / 180.0;     // 0.1°
+  // Your fork’s signature:
+  // TriangulateBearingsMidpoint(centers, bearings, thresholds, min_angle, max_angle)
+  const double min_angle = 0.1 * M_PI / 180.0;
   const double max_angle = M_PI - min_angle;
+  std::vector<double> thresholds(i, 1.0);
 
-  auto result = ::geometry::TriangulateBearingsMidpoint(bearings, centers, weights, min_angle, max_angle);
-  if (!result.first) return false;
+  auto res = ::geometry::TriangulateBearingsMidpoint(centers, bearings, thresholds, min_angle, max_angle);
+  if (!res.first) return false;
 
-  coordinates = result.second;
+  coordinates = res.second;
   return true;
 }
 
 // -----------------------------------------------------------------------------
-// Bundle — signature must use const GCP vector reference
+// Bundle  (MATCHES HEADER EXACTLY: const AlignedVector<...>& gcp)
 // -----------------------------------------------------------------------------
 py::dict BAHelpers::Bundle(
-    sfmmap::Map& /*map*/,
-    const sfmmap::CameraMap& /*camera_priors*/,
-    const sfmmap::RigCameraMap& /*rig_camera_priors*/,
-    const AlignedVector<sfmmap::GroundControlPoint>& /*gcp*/,
-    const py::dict& /*config*/) {
+    sfmmap::Map& map,
+    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
+    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+    const AlignedVector<sfmmap::GroundControlPoint>& gcp,
+    const py::dict& config) {
+  (void)map; (void)camera_priors; (void)rig_camera_priors; (void)gcp; (void)config;
   py::dict report;
   report["status"] = "ok";
   return report;
 }
 
 // -----------------------------------------------------------------------------
-// BundleShotPoses — exact header match (const refs/typedefs)
+// BundleShotPoses  (MATCHES HEADER EXACTLY)
 // -----------------------------------------------------------------------------
 py::dict BAHelpers::BundleShotPoses(
-    sfmmap::Map& /*map*/,
+    sfmmap::Map& map,
     const std::unordered_set<sfmmap::ShotId>& shot_ids,
-    const sfmmap::CameraMap& /*camera_priors*/,
-    const sfmmap::RigCameraMap& /*rig_camera_priors*/,
-    const py::dict& /*config*/) {
+    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
+    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+    const py::dict& config) {
+  (void)map; (void)shot_ids; (void)camera_priors; (void)rig_camera_priors; (void)config;
   py::dict report;
   report["status"]    = "ok";
   report["num_shots"] = static_cast<int>(shot_ids.size());
@@ -222,12 +228,15 @@ py::dict BAHelpers::BundleShotPoses(
 }
 
 // -----------------------------------------------------------------------------
-// Stubs kept as no-ops to satisfy linkage
+// Copy BA state back to map (stubbed)
 // -----------------------------------------------------------------------------
 void BAHelpers::BundleToMap(const bundle::BundleAdjuster& /*bundle_adjuster*/,
                             sfmmap::Map& /*output_map*/,
                             bool /*update_cameras*/) {}
 
+// -----------------------------------------------------------------------------
+// Alignment helpers
+// -----------------------------------------------------------------------------
 std::string BAHelpers::DetectAlignmentConstraints(
     const sfmmap::Map& /*map*/,
     const py::dict& /*config*/,
@@ -245,6 +254,9 @@ void BAHelpers::AlignmentConstraints(
   X.resize(0, 3);
 }
 
+// -----------------------------------------------------------------------------
+// Add GCPs to bundle (stubbed; keep signature to satisfy linkage)
+// -----------------------------------------------------------------------------
 size_t BAHelpers::AddGCPToBundle(bundle::BundleAdjuster& /*ba*/,
                                  const sfmmap::Map& /*map*/,
                                  const AlignedVector<sfmmap::GroundControlPoint>& /*gcp*/,
