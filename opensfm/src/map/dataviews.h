@@ -13,7 +13,7 @@
 #include <deque>
 #include <unordered_map>
 
-namespace map {
+namespace sfmmap {
 
 class ShotView {
  public:
