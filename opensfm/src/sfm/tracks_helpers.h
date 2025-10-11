@@ -14,18 +14,18 @@
 namespace sfm {
 namespace tracks_helpers {
 
-std::unordered_map<sfmmap::map::ShotId, int> CountTracksPerShot(
-    const sfmmap::map::TracksManager& manager,
-    const std::vector<sfmmap::map::ShotId>& shots,
-    const std::vector<sfmmap::map::TrackId>& tracks);
+std::unordered_map<sfmmap::ShotId, int> CountTracksPerShot(
+    const sfmmap::TracksManager& manager,
+    const std::vector<sfmmap::ShotId>& shots,
+    const std::vector<sfmmap::TrackId>& tracks);
 
-void AddConnections(sfmmap::map::TracksManager& manager,
-                    const sfmmap::map::ShotId& shot_id,
-                    const std::vector<sfmmap::map::TrackId>& connections);
+void AddConnections(sfmmap::TracksManager& manager,
+                    const sfmmap::ShotId& shot_id,
+                    const std::vector<sfmmap::TrackId>& connections);
 
-void RemoveConnections(sfmmap::map::TracksManager& manager,
-                       const sfmmap::map::ShotId& shot_id,
-                       const std::vector<sfmmap::map::TrackId>& connections);
+void RemoveConnections(sfmmap::TracksManager& manager,
+                       const sfmmap::ShotId& shot_id,
+                       const std::vector<sfmmap::TrackId>& connections);
 
 }  // namespace tracks_helpers
 }  // namespace sfm
