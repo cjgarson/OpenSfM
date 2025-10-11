@@ -4,7 +4,7 @@
 
 #include <Eigen/Dense>
 
-namespace map {
+namespace sfmmap {
 struct Observation {
   Observation() = default;
   Observation(double x, double y, double s, int r, int g, int b, int feature,
