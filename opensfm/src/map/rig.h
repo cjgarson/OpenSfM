@@ -1,9 +1,10 @@
 #pragma once
 
 #include <foundation/optional.h>
-#include <geometry/pose.h>
 #include <geometry/camera.h>
+#include <geometry/pose.h>
 #include <map/defines.h>
+
 #include <Eigen/Core>
 #include <Eigen/StdVector>
 
@@ -18,27 +19,32 @@ struct RigCamera {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
   enum RelativeType {
-    FIXED = 0,    // All instances of this rig camera have fixed relative poses
-    SHARED = 1,   // All instances share the same relative pose (optimized)
-    VARIABLE = 2  // Each rig camera has its own pose (optimized)
+    // All instances of this rig camera have their relative poses fixed
+    FIXED = 0,
+    // All instances share the same relative pose which is optimized
+    SHARED = 1,
+    // Each rig camera has its own pose which is optimized
+    VARIABLE = 2,
   };
 
+  // Specify how to optimize rig relatives
   RelativeType relative_type{RelativeType::SHARED};
 
-  // Pose of the camera wrt. the rig coordinate frame
+  /* Pose of the camera wrt. the rig coordinate frame */
   ::geometry::Pose pose;
 
-  // Unique identifier of this RigCamera
+  /* Unique identifier of this RigCamera */
   map::RigCameraId id;
 
   RigCamera() = default;
-  RigCamera(const ::geometry::Pose& pose, const map::RigCameraId& id)
-      : pose(pose), id(id) {}
+  RigCamera(const ::geometry::Pose& p, const map::RigCameraId& rid)
+      : pose(p), id(rid) {}
 };
 
 class RigInstance {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
   map::RigInstanceId id;
 
   RigInstance() = default;
@@ -50,10 +56,10 @@ class RigInstance {
   }
   std::unordered_map<map::ShotId, map::Shot*>& GetShots() { return shots_; }
 
-  const std::unordered_map<map::ShotId, map::RigCamera*>& GetRigCameras() const {
+  std::unordered_map<map::ShotId, map::RigCamera*>& GetRigCameras() {
     return shots_rig_cameras_;
   }
-  std::unordered_map<map::ShotId, map::RigCamera*>& GetRigCameras() {
+  const std::unordered_map<map::ShotId, map::RigCamera*>& GetRigCameras() const {
     return shots_rig_cameras_;
   }
 
@@ -68,7 +74,7 @@ class RigInstance {
   // Add a new shot to this instance
   void AddShot(map::RigCamera* rig_camera, map::Shot* shot);
 
-  // Update instance pose and shot poses wrt. a given shot
+  // Update instance pose and shot's poses wrt. to a given shot of the instance
   void UpdateInstancePoseWithShot(const map::ShotId& shot_id,
                                   const ::geometry::Pose& shot_pose);
 
@@ -76,10 +82,11 @@ class RigInstance {
   void UpdateRigCameraPose(const map::RigCameraId& rig_camera_id,
                            const ::geometry::Pose& pose);
 
+  // Removal
   void RemoveShot(const map::ShotId& shot_id);
 
  private:
-  // Actual instantiation of a rig: each shot maps to a RigCamera
+  // Actual instantiation of a rig : each shot gets mapped to some RigCamera
   std::unordered_map<map::ShotId, map::Shot*> shots_;
   std::unordered_map<map::ShotId, map::RigCamera*> shots_rig_cameras_;
 
@@ -94,7 +101,8 @@ class RigInstance {
       std::equal_to<map::ShotId>,
       Eigen::aligned_allocator<
           std::pair<const map::ShotId,
-                    foundation::OptionalValue<map::RigCamera>>>> own_rig_cameras_;
+                    foundation::OptionalValue<map::RigCamera>>>>
+      own_rig_cameras_;
 };
 
 }  // namespace map
