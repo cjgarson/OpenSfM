@@ -3,7 +3,7 @@
 
 #include <algorithm>
 
-namespace map {
+namespace sfmmap {
 
 Landmark::Landmark(const LandmarkId& lm_id, const Vec3d& global_pos)
     : id_(lm_id), global_pos_(global_pos), color_(255, 0, 0) {}
