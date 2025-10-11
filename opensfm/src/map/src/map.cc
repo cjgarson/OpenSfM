@@ -19,7 +19,7 @@ void AssignShot(map::Shot& to, const map::Shot& from) {
   to.SetCovariance(from.GetCovariance());
 }
 }  // namespace
-namespace map {
+namespace sfmmap {
 
 CameraView   Map::GetCameraView()   { return CameraView(*this); }
 ShotView     Map::GetShotView()     { return ShotView(*this); }
