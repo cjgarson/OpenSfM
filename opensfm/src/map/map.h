@@ -18,7 +18,7 @@
 #include <set>
 #include <unordered_map>
 
-namespace map {
+namespace sfmmap {
 
 // Forward-declare the view classes to avoid a circular include.
 // (map.h does NOT include dataviews.h; dataviews.h will include map.h)
