@@ -90,10 +90,10 @@ class BAHelpers {
 
  private:
   // Internal helpers implemented in ba_helpers.cc
-  static bool TriangulateGCP(
-      const sfmmap::GroundControlPoint& point,
-      const std::unordered_map<sfmmap::ShotId, sfmmap::Shot>& shots,
-      Vec3d& coordinates);
+ static bool TriangulateGCP(
+     const sfmmap::GroundControlPoint& point,
+     const sfmmap::Map::ShotMap& shots,
+     Vec3d& coordinates);
 
   static void AlignmentConstraints(
       const sfmmap::Map& map,
