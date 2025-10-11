@@ -1,18 +1,24 @@
 #pragma once
-
-// Include full map definition because we reference Map::XMap aliases
-#include <map/map.h>
-
 #include <geometry/camera.h>
 #include <geometry/similarity.h>
-#include <map/landmark.h>
+#include <map/defines.h>
 #include <map/rig.h>
 #include <map/shot.h>
-
-#include <deque>
+#include <map/landmark.h>
+#include <Eigen/Core>
 #include <unordered_map>
 
 namespace map {
+
+// Forward declaration
+class Map;
+
+// Forward declarations of aligned alias types used in signatures
+using CameraId = std::string;
+using ShotId = std::string;
+using LandmarkId = std::string;
+using RigCameraId = std::string;
+using RigInstanceId = std::string;
 
 // ---------- ShotView ----------
 class ShotView {
