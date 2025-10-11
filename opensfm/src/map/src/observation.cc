@@ -1,5 +1,5 @@
 #include <map/observation.h>
 
-namespace map {
+namespace sfmmap {
 constexpr int Observation::NO_SEMANTIC_VALUE;
 }
