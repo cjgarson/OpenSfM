@@ -1,7 +1,6 @@
 #pragma once
 
-// We include map.h so we can use Map::ShotMap, Map::CameraMap, etc.
-// This is safe because map.h only forward-declares the *View classes.
+// Include map.h to use Map's nested container types
 #include <map/map.h>
 
 #include <geometry/camera.h>
@@ -18,8 +17,8 @@ namespace sfmmap {
 class ShotView {
  public:
   explicit ShotView(Map& map);
-  Shot& GetShot(const map::ShotId& shot_id);
-  bool HasShot(const map::ShotId& shot_id) const;
+  Shot& GetShot(const ShotId& shot_id);
+  bool HasShot(const ShotId& shot_id) const;
   const Map::ShotMap& GetShots() const;
   size_t NumberOfShots() const;
 
@@ -30,8 +29,8 @@ class ShotView {
 class PanoShotView {
  public:
   explicit PanoShotView(Map& map);
-  Shot& GetShot(const map::ShotId& shot_id);
-  bool HasShot(const map::ShotId& shot_id) const;
+  Shot& GetShot(const ShotId& shot_id);
+  bool HasShot(const ShotId& shot_id) const;
   const Map::ShotMap& GetShots() const;
   size_t NumberOfShots() const;
 
@@ -99,4 +98,4 @@ class BiasView {
   Map& map_;
 };
 
-}  // namespace map
+}  // namespace sfmmap
