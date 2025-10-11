@@ -10,7 +10,6 @@
 #include <map/rig.h>
 #include <map/shot.h>
 #include <map/tracks_manager.h>
-#include <map/dataviews.h>
 
 #include <Eigen/Core>
 #include <Eigen/StdVector>
