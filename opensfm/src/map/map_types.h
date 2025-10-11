@@ -3,7 +3,7 @@
 #include <Eigen/Core>
 #include <Eigen/StdVector>
 
-namespace map {
+namespace sfmmap {
 template <typename K, typename V>
 using AlignedUnorderedMap = std::unordered_map<
     K, V,
