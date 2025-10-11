@@ -240,7 +240,7 @@ map::TracksManager InstanciateFromStreamT(S& fstream, const std::string &filenam
 
 }  // namespace
 
-namespace map {
+namespace sfmmap {
 void TracksManager::AddObservation(const ShotId& shot_id,
                                    const TrackId& track_id,
                                    const Observation& observation) {
