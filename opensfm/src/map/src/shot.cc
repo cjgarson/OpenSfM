@@ -7,45 +7,56 @@
 #include <numeric>
 #include <stdexcept>
 #include <string>
+
 namespace {
 bool IsSingleShotRig(const map::RigInstance* rig_instance,
                      const map::RigCamera* rig_camera) {
   const bool has_identity_rig_camera = rig_camera->pose.IsIdentity();
-  const bool is_single_shot_instance = rig_instance->NumberOfShots() == 1;
+  const bool is_single_shot_instance =
+      rig_instance && rig_instance->GetShots().size() == 1;
   return has_identity_rig_camera && is_single_shot_instance;
 }
 }  // namespace
 
 namespace map {
 
-Shot::Shot(const ShotId& shot_id, const geometry::Camera* const shot_camera,
-           RigInstance* rig_instance, RigCamera* rig_camera,
+Shot::Shot(const ShotId& shot_id,
+           const geometry::Camera* const shot_camera,
+           RigInstance* rig_instance,
+           RigCamera* rig_camera,
            const geometry::Pose& pose)
     : id_(shot_id),
       pose_(std::make_unique<geometry::Pose>(pose)),
       rig_instance_(rig_instance),
       rig_camera_(rig_camera),
       shot_camera_(shot_camera) {
-  rig_instance_->AddShot(rig_camera_, this);
-  rig_instance_->UpdateInstancePoseWithShot(shot_id, pose);
+  if (rig_instance_) {
+    rig_instance_->AddShot(rig_camera_, this);
+    rig_instance_->UpdateInstancePoseWithShot(shot_id, pose);
+  }
 }
 
-Shot::Shot(const ShotId& shot_id, const geometry::Camera* const shot_camera,
-           RigInstance* rig_instance, RigCamera* rig_camera)
+Shot::Shot(const ShotId& shot_id,
+           const geometry::Camera* const shot_camera,
+           RigInstance* rig_instance,
+           RigCamera* rig_camera)
     : id_(shot_id),
       pose_(std::make_unique<geometry::Pose>(geometry::Pose())),
       rig_instance_(rig_instance),
       rig_camera_(rig_camera),
       shot_camera_(shot_camera) {
-  rig_instance_->AddShot(rig_camera_, this);
+  if (rig_instance_) {
+    rig_instance_->AddShot(rig_camera_, this);
+  }
 }
 
-Shot::Shot(const ShotId& shot_id, const geometry::Camera& shot_camera,
+Shot::Shot(const ShotId& shot_id,
+           const geometry::Camera& shot_camera,
            const geometry::Pose& pose)
     : id_(shot_id),
       pose_(std::make_unique<geometry::Pose>(pose)),
-      own_rig_instance_(map::RigInstance(shot_id)),
-      own_rig_camera_(map::RigCamera(geometry::Pose(), shot_id)),
+      own_rig_instance_(RigInstance(shot_id)),
+      own_rig_camera_(RigCamera{shot_id, geometry::Pose()}),
       rig_instance_(&own_rig_instance_.Value()),
       rig_camera_(&own_rig_camera_.Value()),
       own_camera_(shot_camera),
@@ -54,74 +65,38 @@ Shot::Shot(const ShotId& shot_id, const geometry::Camera& shot_camera,
   rig_instance_->SetPose(pose);
 }
 
-bool Shot::IsInRig() const { return true; }
+bool Shot::IsInRig() const { return rig_instance_ != nullptr; }
 
 void Shot::SetRig(RigInstance* rig_instance, RigCamera* rig_camera) {
   rig_instance_ = rig_instance;
   rig_camera_ = rig_camera;
-  pose_ = std::make_unique<geometry::PoseImmutable>(*pose_);
 }
 
 const RigInstanceId& Shot::GetRigInstanceId() const {
-  return rig_instance_->id;
+  if (!rig_instance_) {
+    throw std::runtime_error("Shot has no rig instance.");
+  }
+  return rig_instance_->GetId();
 }
 
-const RigCameraId& Shot::GetRigCameraId() const { return rig_camera_->id; }
+const RigCameraId& Shot::GetRigCameraId() const {
+  if (!rig_camera_) {
+    throw std::runtime_error("Shot has no rig camera.");
+  }
+  return rig_camera_->id;
+}
 
 void ShotMeasurements::Set(const ShotMeasurements& other) {
-  if (other.capture_time_.HasValue()) {
-    capture_time_.SetValue(other.capture_time_.Value());
-  } else {
-    capture_time_.Reset();
-  }
-  if (other.gps_position_.HasValue()) {
-    gps_position_.SetValue(other.gps_position_.Value());
-  } else {
-    gps_position_.Reset();
-  }
-  if (other.gps_accuracy_.HasValue()) {
-    gps_accuracy_.SetValue(other.gps_accuracy_.Value());
-  } else {
-    gps_accuracy_.Reset();
-  }
-  if (other.opk_angles_.HasValue()) {
-    opk_angles_.SetValue(other.opk_angles_.Value());
-  } else {
-    opk_angles_.Reset();
-  }
-  if (other.opk_accuracy_.HasValue()) {
-    opk_accuracy_.SetValue(other.opk_accuracy_.Value());
-  } else {
-    opk_accuracy_.Reset();
-  }
-  if (other.compass_accuracy_.HasValue()) {
-    compass_accuracy_.SetValue(other.compass_accuracy_.Value());
-  } else {
-    compass_accuracy_.Reset();
-  }
-
-  if (other.compass_angle_.HasValue()) {
-    compass_angle_.SetValue(other.compass_angle_.Value());
-  } else {
-    compass_angle_.Reset();
-  }
-  if (other.gravity_down_.HasValue()) {
-    gravity_down_.SetValue(other.gravity_down_.Value());
-  } else {
-    gravity_down_.Reset();
-  }
-  if (other.orientation_.HasValue()) {
-    orientation_.SetValue(other.orientation_.Value());
-  } else {
-    orientation_.Reset();
-  }
-  if (other.sequence_key_.HasValue()) {
-    sequence_key_.SetValue(other.sequence_key_.Value());
-  } else {
-    sequence_key_.Reset();
-  }
-
-  // Copy the attributes
+  capture_time_ = other.capture_time_;
+  gps_position_ = other.gps_position_;
+  gps_accuracy_ = other.gps_accuracy_;
+  opk_angles_ = other.opk_angles_;
+  opk_accuracy_ = other.opk_accuracy_;
+  compass_accuracy_ = other.compass_accuracy_;
+  compass_angle_ = other.compass_angle_;
+  gravity_down_ = other.gravity_down_;
+  orientation_ = other.orientation_;
+  sequence_key_ = other.sequence_key_;
   attributes_ = other.GetAttributes();
 }
 
@@ -129,7 +104,7 @@ void Shot::RemoveLandmarkObservation(const FeatureId id) {
   const auto find_feature = landmark_id_.find(id);
   if (find_feature == landmark_id_.end()) {
     throw std::runtime_error("Can't find Feature ID " + std::to_string(id) +
-                             " in Shot " + this->id_);
+                             " in Shot " + id_);
   }
   auto* lm = find_feature->second;
   landmark_id_.erase(id);
@@ -137,41 +112,51 @@ void Shot::RemoveLandmarkObservation(const FeatureId id) {
 }
 
 void Shot::SetPose(const geometry::Pose& pose) {
+  if (!rig_instance_ || !rig_camera_) {
+    *pose_ = pose;
+    return;
+  }
+
   if (!IsSingleShotRig(rig_instance_, rig_camera_)) {
     throw std::runtime_error(
-        "Can't set the pose of Shot belonging to a RigInstance");
-  } else {
-    rig_instance_->SetPose(pose);
+        "Can't set the pose of a shot belonging to a multi-shot rig instance");
   }
+
+  rig_instance_->SetPose(pose);
   *pose_ = pose;
 }
 
 geometry::Pose Shot::GetPoseInRig() const {
-  // pose(shot) = pose(rig_camera)*pose(instance)
+  // pose(shot) = pose(instance) * pose(rig_camera)
   const auto& pose_instance = rig_instance_->GetPose();
   const auto& rig_camera_pose = rig_camera_->pose;
-  return rig_camera_pose.Compose(pose_instance);
+  return pose_instance.Compose(rig_camera_pose);
 }
 
-const geometry::Pose* const Shot::GetPose() const {
-  *pose_ = GetPoseInRig();
-  if (IsSingleShotRig(rig_instance_, rig_camera_)) {
-    return &rig_instance_->GetPose();
+const geometry::Pose* Shot::GetPose() const {
+  if (rig_instance_ && rig_camera_) {
+    *pose_ = GetPoseInRig();
+    if (IsSingleShotRig(rig_instance_, rig_camera_)) {
+      return &rig_instance_->GetPose();
+    }
   }
   return pose_.get();
 }
 
-geometry::Pose* const Shot::GetPose() {
-  *pose_ = GetPoseInRig();
-  if (IsSingleShotRig(rig_instance_, rig_camera_)) {
-    return &rig_instance_->GetPose();
+geometry::Pose* Shot::GetPose() {
+  if (rig_instance_ && rig_camera_) {
+    *pose_ = GetPoseInRig();
+    if (IsSingleShotRig(rig_instance_, rig_camera_)) {
+      return &rig_instance_->GetPose();
+    }
   }
   return pose_.get();
 }
 
 Vec2d Shot::Project(const Vec3d& global_pos) const {
-  return shot_camera_->Project(GetPose()->RotationWorldToCamera() * global_pos +
-                               GetPose()->TranslationWorldToCamera());
+  const auto* P = GetPose();
+  return shot_camera_->Project(P->RotationWorldToCamera() * global_pos +
+                               P->TranslationWorldToCamera());
 }
 
 MatX2d Shot::ProjectMany(const MatX3d& points) const {
@@ -193,4 +178,5 @@ MatX3d Shot::BearingMany(const MatX2d& points) const {
   }
   return bearings;
 }
+
 }  // namespace map
