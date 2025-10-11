@@ -4,7 +4,7 @@
 #include <Eigen/Core>
 #include <memory>
 #include <vector>
-namespace map {
+namespace sfmmap {
 struct KeyCompare {
   template <typename T>
   bool operator()(T* lhs, T* rhs) const {
