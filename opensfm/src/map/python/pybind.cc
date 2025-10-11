@@ -188,12 +188,13 @@ PYBIND11_MODULE(pymap, m) {
            py::return_value_policy::reference_internal)
       .def("get_shots",
            [](sfmmap::Map& m)
-             -> std::unordered_map<sfmmap::ShotId, sfmmap::Shot&, sfmmap::KeyCompare>& {
+             -> const sfmmap::Map::ShotMap& {
              return m.GetShots();
            }, py::return_value_policy::reference_internal)
+
       .def("get_landmarks",
            [](sfmmap::Map& m)
-             -> std::unordered_map<sfmmap::LandmarkId, sfmmap::Landmark&, sfmmap::KeyCompare>& {
+             -> const sfmmap::Map::LandmarkMap& {
              return m.GetLandmarks();
-           }, py::return_value_policy::reference_internal);
+           }, py::return_value_policy::reference_internal)
 }
