@@ -18,7 +18,7 @@ bool IsSingleShotRig(const map::RigInstance* rig_instance,
 }
 }  // namespace
 
-namespace map {
+namespace sfmmap {
 
 Shot::Shot(const ShotId& shot_id,
            const geometry::Camera* const shot_camera,
