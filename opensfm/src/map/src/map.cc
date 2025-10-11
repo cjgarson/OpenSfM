@@ -21,11 +21,11 @@ void AssignShot(map::Shot& to, const map::Shot& from) {
 }  // namespace
 namespace map {
 
-CameraView Map::GetCameraView() { return CameraView(*this); }
-ShotView Map::GetShotView() { return ShotView(*this); }
+CameraView   Map::GetCameraView()   { return CameraView(*this); }
+ShotView     Map::GetShotView()     { return ShotView(*this); }
 PanoShotView Map::GetPanoShotView() { return PanoShotView(*this); }
 LandmarkView Map::GetLandmarkView() { return LandmarkView(*this); }
-BiasView Map::GetBiasView() { return BiasView(*this); }
+BiasView     Map::GetBiasView()     { return BiasView(*this); }
 
 std::unique_ptr<Map> Map::DeepCopy(const Map& map, bool copy_observations) {
   auto map_copy = std::make_unique<Map>();
