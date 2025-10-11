@@ -9,80 +9,126 @@
 namespace sfm {
 namespace retriangulation {
 
+// Rigid+scale mapping “from” shot frame into “to” shot frame, constructed
+// with the elements we already have available in the codebase.
+static inline geometry::Similarity MakeSimilarityFromTo(
+    const geometry::Pose& shot_from_pose,  // already shifted to 'to' LLA
+    const geometry::Pose& shot_to_pose,
+    double inv_from_scale /* 1.0/shot_from.scale or 1.0 if zero */) {
+  // R_to_from maps coordinates expressed in the “to” camera frame into the
+  // “from” camera frame
+  const Mat3d R_to_from =
+      shot_from_pose.RotationCameraToWorld() * shot_to_pose.RotationWorldToCamera();
+
+  // t_from_to is the “from” camera origin expressed in the “to” coordinates,
+  // respecting the scale convention in the original implementation
+  const Vec3d t_from_to =
+      -inv_from_scale * R_to_from * shot_to_pose.GetOrigin() +
+      shot_from_pose.GetOrigin();
+
+  // The constructor geometry::Similarity(R, t, s) is available in-tree
+  return geometry::Similarity(R_to_from, t_from_to, inv_from_scale);
+}
+
 void RealignMaps(const sfmmap::Map& map_from, sfmmap::Map& map_to,
                  bool update_points) {
   const auto& map_from_shots = map_from.GetShots();
 
-  const auto& from_ref   = map_from.GetTopocentricConverter();
-  const auto& to_ref     = map_to.GetTopocentricConverter();
-  const auto  from_to_offset = to_ref.ToTopocentric(from_ref.GetLlaRef());
+  const auto& from_ref = map_from.GetTopocentricConverter();
+  const auto& to_ref   = map_to.GetTopocentricConverter();
+  const Vec3d from_to_offset = to_ref.ToTopocentric(from_ref.GetLlaRef());
 
-  // first, record transforms that remap points of 'to'
+  // record transforms that remap points of 'to' relative to 'from'
   std::unordered_map<sfmmap::ShotId, geometry::Similarity> from_to_transforms;
-  for (const auto& shot_to : map_to.GetShots()) {
-    if (!map_from.HasShot(shot_to.first)) {
+  for (const auto& shot_to_pair : map_to.GetShots()) {
+    const auto& shot_id = shot_to_pair.first;
+    const auto& shot_to = shot_to_pair.second;
+
+    if (!map_from.HasShot(shot_id)) {
       continue;
     }
-    const auto& shot_from = map_from.GetShot(shot_to.first);
-    auto shot_from_pose   = *shot_from.GetPose();
-    const auto shot_to_pose = *shot_to.second.GetPose();
 
-    // put 'from' in LLA of 'to'
+    const auto& shot_from = map_from.GetShot(shot_id);
+
+    // clone then nudge “from” shot into “to” topocentric LLA
+    geometry::Pose shot_from_pose = *shot_from.GetPose();
     shot_from_pose.SetOrigin(shot_from_pose.GetOrigin() + from_to_offset);
 
-    // compute similarity that brings 'to' shot to 'from' shot
-    geometry::Similarity sim = geometry::Similarity::FromRigToRig(shot_to_pose, shot_from_pose);
-    from_to_transforms[shot_to.first] = sim;
+    const geometry::Pose shot_to_pose = *shot_to.GetPose();
+
+    const double inv_scale =
+        (shot_from.scale != 0.0) ? (1.0 / shot_from.scale) : 1.0;
+
+    from_to_transforms[shot_id] =
+        MakeSimilarityFromTo(shot_from_pose, shot_to_pose, inv_scale);
   }
 
-  // apply transforms
+  // remap points of 'to' using the computed transforms if requested
+  if (update_points) {
+    constexpr auto max_dbl = std::numeric_limits<double>::max();
+    for (auto& lm_pair : map_to.GetLandmarks()) {
+      auto& landmark = lm_pair.second;
+      const Vec3d point = landmark.GetGlobalPos();
+
+      std::pair<double, sfmmap::ShotId> best_shot = {max_dbl, ""};
+      for (const auto& shot_obs_pair : landmark.GetObservations()) {
+        const auto* shot = shot_obs_pair.first;
+        if (map_from_shots.find(shot->GetId()) == map_from_shots.end()) {
+          continue;
+        }
+        const Vec3d ray   = point - shot->GetPose()->GetOrigin();
+        const double d2   = ray.squaredNorm();
+        if (d2 < best_shot.first) best_shot = {d2, shot->GetId()};
+      }
+
+      if (best_shot.first == max_dbl) continue;
+
+      const auto xform_it = from_to_transforms.find(best_shot.second);
+      if (xform_it == from_to_transforms.end()) continue;
+
+      landmark.SetGlobalPos(xform_it->second.Transform(landmark.GetGlobalPos()));
+    }
+  }
+
+  // synchronize shots and cameras
   std::unordered_set<sfmmap::ShotId> to_delete;
-  for (auto& [shot_id, shot_to] : map_to.GetShots()) {
+  for (auto& shot_to_pair : map_to.GetShots()) {
+    const auto& shot_id = shot_to_pair.first;
+    auto& shot_to       = shot_to_pair.second;
+
     if (!map_from.HasShot(shot_id)) {
       to_delete.insert(shot_id);
       continue;
     }
-    const auto& sim = from_to_transforms[shot_id];
-    // update shot pose
-    shot_to.SetPose(sim.TransformPose(*shot_to.GetPose()));
-    // update each landmark observed in this shot
-    for (auto& lm_obs : shot_to.GetLandmarkObservations()) {
-      const sfmmap::LandmarkId& lm_id = lm_obs.first->id_;
-      if (!map_from.HasLandmark(lm_id)) {
-        continue;
-      }
-      auto& lm_to = map_to.GetLandmark(lm_id);
-      const auto& lm_from = map_from.GetLandmark(lm_id);
-      // transfer point
-      lm_to.SetGlobalPos(sim.Transform(lm_from.GetGlobalPos()));
-    }
+
+    const auto& shot_from = map_from.GetShot(shot_id);
+    auto& camera_to = map_to.GetCamera(shot_to.GetCamera()->id);
+
+    // copy intrinsics from map_from
+    camera_to.SetParametersValues(shot_from.GetCamera()->GetParametersValues());
+    // copy ad-hoc metadata
+    shot_to.scale    = shot_from.scale;
+    shot_to.merge_cc = shot_from.merge_cc;
   }
-  // remove shots and orphaned points that couldn't be aligned
-  for (const auto& shot_id : to_delete) {
-    map_to.RemoveShot(shot_id);
-  }
-  // optionally, remove points not seen by any aligned shot
-  if (update_points) {
-    std::unordered_set<sfmmap::LandmarkId> to_remove;
-    for (const auto& lm_pair : map_to.GetLandmarks()) {
-      const auto& lm_id = lm_pair.first;
-      if (!map_from.HasLandmark(lm_id)) {
-        to_remove.insert(lm_id);
+
+  // map rig instances (rig cameras assumed unchanged)
+  for (auto& rig_instance_pair : map_to.GetRigInstances()) {
+    auto& rig_instance_to = rig_instance_pair.second;
+    for (const auto& shot_pair : rig_instance_to.GetShots()) {
+      const auto& shot_id = shot_pair.first;
+      if (map_from_shots.find(shot_id) != map_from_shots.end()) {
+        const auto& shot_from = map_from_shots.at(shot_id);
+        auto& to_pose = rig_instance_to.GetPose();
+        to_pose = shot_from.GetRigInstance()->GetPose();
+        to_pose.SetOrigin(to_pose.GetOrigin() + from_to_offset);
+        break;
       }
-    }
-    for (const auto& lm_id : to_remove) {
-      map_to.RemoveLandmark(lm_id);
     }
   }
 
-  // align biases (if any)
-  for (auto& cam_pair : map_to.GetCameras()) {
-    const auto& cam_id = cam_pair.first;
-    if (map_from.HasBias(cam_id) && map_to.HasBias(cam_id)) {
-      // combine the two bias transformations
-      geometry::Similarity new_bias = map_from.GetBias(cam_id) * map_to.GetBias(cam_id);
-      map_to.SetBias(cam_id, new_bias);
-    }
+  // remove any extra shots
+  for (const auto& shot_id : to_delete) {
+    map_to.RemoveShot(shot_id);
   }
 }
 
