@@ -12,7 +12,7 @@
 #include <iostream>
 #include <unordered_map>
 
-namespace map {
+namespace sfmmap {
 class Map;
 
 struct ShotMesh {
