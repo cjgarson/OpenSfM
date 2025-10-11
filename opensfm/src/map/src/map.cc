@@ -176,7 +176,7 @@ void Map::CleanLandmarksBelowMinObservations(const size_t min_observations) {
 Shot& Map::CreateShot(const ShotId& shot_id, const CameraId& camera_id,
                       const RigCameraId& rig_camera_id,
                       const RigInstanceId& instance_id,
-                      const geometry::Pose& pose) {
+                      const ::geometry::Pose& pose) {
   auto it_exist = shots_.find(shot_id);
   if (it_exist == shots_.end())  // create
   {
@@ -241,7 +241,7 @@ void Map::RemoveShot(const ShotId& shot_id) {
 Shot& Map::CreatePanoShot(const ShotId& shot_id, const CameraId& camera_id,
                           const RigCameraId& rig_camera_id,
                           const RigInstanceId& instance_id,
-                          const geometry::Pose& pose) {
+                          const ::geometry::Pose& pose) {
   auto it_exist = pano_shots_.find(shot_id);
   if (it_exist == pano_shots_.end()) {
     const auto& camera = GetCamera(camera_id);
@@ -319,13 +319,13 @@ void Map::RemoveLandmark(const LandmarkId& lm_id) {
   }
 }
 
-geometry::Camera& Map::CreateCamera(const geometry::Camera& cam) {
+::geometry::Camera& Map::CreateCamera(const ::geometry::Camera& cam) {
   auto it = cameras_.emplace(std::make_pair(cam.id, cam));
-  bias_.emplace(std::make_pair(cam.id, geometry::Similarity()));
+  bias_.emplace(std::make_pair(cam.id, ::geometry::Similarity()));
   return it.first->second;
 }
 
-geometry::Camera& Map::GetCamera(const CameraId& cam_id) {
+::geometry::Camera& Map::GetCamera(const CameraId& cam_id) {
   auto it = cameras_.find(cam_id);
   if (it == cameras_.end()) {
     throw std::runtime_error("Accessing invalid CameraId " + cam_id);
@@ -333,7 +333,7 @@ geometry::Camera& Map::GetCamera(const CameraId& cam_id) {
   return it->second;
 }
 
-const geometry::Camera& Map::GetCamera(const CameraId& cam_id) const {
+const ::geometry::Camera& Map::GetCamera(const CameraId& cam_id) const {
   auto it = cameras_.find(cam_id);
   if (it == cameras_.end()) {
     throw std::runtime_error("Accessing invalid CameraId " + cam_id);
@@ -486,7 +486,7 @@ bool Map::HasRigInstance(const RigInstanceId& instance_id) const {
   return rig_instances_.find(instance_id) != rig_instances_.end();
 }
 
-geometry::Similarity& Map::GetBias(const CameraId& camera_id) {
+::geometry::Similarity& Map::GetBias(const CameraId& camera_id) {
   const auto it = bias_.find(camera_id);
   if (it == bias_.end()) {
     throw std::runtime_error("Accessing invalid CameraID " + camera_id);
@@ -495,7 +495,7 @@ geometry::Similarity& Map::GetBias(const CameraId& camera_id) {
 }
 
 void Map::SetBias(const CameraId& camera_id,
-                  const geometry::Similarity& transform) {
+                  const ::geometry::Similarity& transform) {
   auto it = bias_.find(camera_id);
   if (it == bias_.end()) {
     throw std::runtime_error("Accessing invalid CameraID " + camera_id);
