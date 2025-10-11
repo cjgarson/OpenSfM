@@ -12,13 +12,14 @@
 #include <unordered_set>
 
 namespace {
-void AssignShot(map::Shot& to, const map::Shot& from) {
+void AssignShot(sfmmap::Shot& to, const sfmmap::Shot& from) {
   to.merge_cc = from.merge_cc;
   to.scale = from.scale;
   to.SetShotMeasurements(from.GetShotMeasurements());
   to.SetCovariance(from.GetCovariance());
 }
 }  // namespace
+
 namespace sfmmap {
 
 CameraView   Map::GetCameraView()   { return CameraView(*this); }
@@ -31,48 +32,46 @@ std::unique_ptr<Map> Map::DeepCopy(const Map& map, bool copy_observations) {
   auto map_copy = std::make_unique<Map>();
   map_copy->topo_conv_ = map.topo_conv_;
 
-  for (const auto& camera : map.GetCameras()) {
-    map_copy->CreateCamera(camera.second);
+  // Copy cameras
+  for (const auto& camera_kv : map.GetCameras()) {
+    map_copy->CreateCamera(camera_kv.second);
   }
 
-  const auto& shots = map.GetShots();
-  for (const auto& shot : shots) {
-    if (map_copy->HasShot(shot.first)) {
-      continue;
+  // Copy shots and pano shots, preserving rig relationships
+  for (const auto& shot_kv : map.GetShots()) {
+    if (!map_copy->HasShot(shot_kv.first)) {
+      map_copy->UpdateShotWithRig(shot_kv.second, false);
     }
-    map_copy->UpdateShotWithRig(shot.second, false);
   }
-
-  const auto& pano_shots = map.GetPanoShots();
-  for (const auto& pano_shot : pano_shots) {
-    if (map_copy->HasPanoShot(pano_shot.first)) {
-      continue;
+  for (const auto& pano_kv : map.GetPanoShots()) {
+    if (!map_copy->HasPanoShot(pano_kv.first)) {
+      map_copy->UpdateShotWithRig(pano_kv.second, true);
     }
-    map_copy->UpdateShotWithRig(pano_shot.second, true);
   }
 
-  for (const auto& landmark : map.GetLandmarks()) {
-    map_copy->CreateLandmark(landmark.first, landmark.second.GetGlobalPos());
+  // Copy landmarks
+  for (const auto& lm_kv : map.GetLandmarks()) {
+    map_copy->CreateLandmark(lm_kv.first, lm_kv.second.GetGlobalPos());
   }
 
+  // Copy observations if requested
   if (copy_observations) {
-    for (const auto& shot : shots) {
-      for (const auto& landmark_n_obs : shot.second.GetLandmarkObservations()) {
-        map_copy->AddObservation(shot.first, landmark_n_obs.first->id_,
-                                 landmark_n_obs.second);
+    for (const auto& shot_kv : map.GetShots()) {
+      for (const auto& obs_kv : shot_kv.second.GetLandmarkObservations()) {
+        map_copy->AddObservation(shot_kv.first, obs_kv.first->id_, obs_kv.second);
       }
     }
   }
 
-  for (const auto& bias : map.GetBiases()) {
-    map_copy->SetBias(bias.first, bias.second);
+  // Copy biases (if any)
+  for (const auto& bias_kv : map.GetBiases()) {
+    map_copy->SetBias(bias_kv.first, bias_kv.second);
   }
 
   return map_copy;
 }
 
-void Map::AddObservation(Shot* const shot, Landmark* const lm,
-                         const Observation& obs) {
+void Map::AddObservation(Shot* const shot, Landmark* const lm, const Observation& obs) {
   lm->AddObservation(shot, obs.feature_id);
   shot->CreateObservation(lm, obs);
 }
@@ -92,76 +91,71 @@ void Map::RemoveObservation(const ShotId& shot_id, const LandmarkId& lm_id) {
 }
 
 const Shot& Map::GetShot(const ShotId& shot_id) const {
-  const auto& it = shots_.find(shot_id);
+  auto it = shots_.find(shot_id);
   if (it == shots_.end()) {
-    throw std::runtime_error("Accessing invalid ShotID " + shot_id);
+    throw std::runtime_error("Invalid ShotID " + shot_id);
   }
   return it->second;
 }
+
 Shot& Map::GetShot(const ShotId& shot_id) {
-  const auto& it = shots_.find(shot_id);
+  auto it = shots_.find(shot_id);
   if (it == shots_.end()) {
-    throw std::runtime_error("Accessing invalid ShotID " + shot_id);
+    throw std::runtime_error("Invalid ShotID " + shot_id);
   }
   return it->second;
 }
 
 Shot& Map::GetPanoShot(const ShotId& shot_id) {
-  const auto& it = pano_shots_.find(shot_id);
+  auto it = pano_shots_.find(shot_id);
   if (it == pano_shots_.end()) {
-    throw std::runtime_error("Accessing invalid PanoShotID " + shot_id);
+    throw std::runtime_error("Invalid PanoShotID " + shot_id);
   }
   return it->second;
 }
 
 const Shot& Map::GetPanoShot(const ShotId& shot_id) const {
-  const auto& it = pano_shots_.find(shot_id);
+  auto it = pano_shots_.find(shot_id);
   if (it == pano_shots_.end()) {
-    throw std::runtime_error("Accessing invalid PanoShotID " + shot_id);
+    throw std::runtime_error("Invalid PanoShotID " + shot_id);
   }
   return it->second;
 }
 
 const Landmark& Map::GetLandmark(const LandmarkId& lm_id) const {
-  const auto& it = landmarks_.find(lm_id);
+  auto it = landmarks_.find(lm_id);
   if (it == landmarks_.end()) {
-    throw std::runtime_error("Accessing invalid LandmarkId " + lm_id);
+    throw std::runtime_error("Invalid LandmarkId " + lm_id);
   }
   return it->second;
 }
+
 Landmark& Map::GetLandmark(const LandmarkId& lm_id) {
-  const auto& it = landmarks_.find(lm_id);
+  auto it = landmarks_.find(lm_id);
   if (it == landmarks_.end()) {
-    throw std::runtime_error("Accessing invalid LandmarkId " + lm_id);
+    throw std::runtime_error("Invalid LandmarkId " + lm_id);
   }
   return it->second;
 }
 
 void Map::ClearObservationsAndLandmarks() {
-  // first JUST delete the observations of the landmark
-  for (auto& id_lm : landmarks_) {
-    auto& observations = id_lm.second.GetObservations();
+  for (auto& lm_kv : landmarks_) {
+    auto& observations = lm_kv.second.GetObservations();
     for (const auto& obs : observations) {
       obs.first->RemoveLandmarkObservation(obs.second);
     }
-    id_lm.second.ClearObservations();
+    lm_kv.second.ClearObservations();
   }
-  // then clear the landmarks_
   landmarks_.clear();
 }
 
-void Map::CleanLandmarksBelowMinObservations(const size_t min_observations) {
+void Map::CleanLandmarksBelowMinObservations(size_t min_observations) {
   for (auto it = landmarks_.begin(); it != landmarks_.end();) {
-    const auto& landmark = it->second;
-    if (landmark.NumberOfObservations() < min_observations) {
-      // 2) Remove all its observation
-      const auto& observations = landmark.GetObservations();
-      for (const auto& obs : observations) {
+    if (it->second.NumberOfObservations() < min_observations) {
+      for (const auto& obs : it->second.GetObservations()) {
         Shot* shot = obs.first;
-        const auto feat_id = obs.second;
-        shot->RemoveLandmarkObservation(feat_id);
+        shot->RemoveLandmarkObservation(obs.second);
       }
-      // 3) Remove from landmarks
       it = landmarks_.erase(it);
     } else {
       ++it;
@@ -169,173 +163,116 @@ void Map::CleanLandmarksBelowMinObservations(const size_t min_observations) {
   }
 }
 
-/**
- * Creates a shot and returns a reference to it
- *
- * @param shot_id       unique id of the shot
- * @param camera_id     unique id of EXISTING camera
- * @param rig_camera_id unique id of EXISTING rig camera
- * @param instance_id   unique id of EXISTING rig instance
- * @param pose          position in the 3D world
- *
- * @returns             returns reference to created or existing shot
- */
 Shot& Map::CreateShot(const ShotId& shot_id, const CameraId& camera_id,
                       const RigCameraId& rig_camera_id,
                       const RigInstanceId& instance_id,
                       const ::geometry::Pose& pose) {
-  auto it_exist = shots_.find(shot_id);
-  if (it_exist == shots_.end())  // create
-  {
-    const auto& camera = GetCamera(camera_id);
-    auto& rig_instance = GetRigInstance(instance_id);
-    auto& rig_camera = GetRigCamera(rig_camera_id);
-    auto it =
-        shots_.emplace(std::piecewise_construct, std::forward_as_tuple(shot_id),
-                       std::forward_as_tuple(shot_id, &camera, &rig_instance,
-                                             &rig_camera, pose));
-    return it.first->second;
-  } else {
+  if (shots_.find(shot_id) != shots_.end()) {
     throw std::runtime_error("Shot " + shot_id + " already exists.");
   }
+  const auto& camera = GetCamera(camera_id);
+  auto& rig_instance = GetRigInstance(instance_id);
+  auto& rig_camera = GetRigCamera(rig_camera_id);
+  auto it = shots_.emplace(std::piecewise_construct,
+                           std::forward_as_tuple(shot_id),
+                           std::forward_as_tuple(shot_id, &camera, &rig_instance, &rig_camera, pose));
+  return it.first->second;
 }
+
 Shot& Map::CreateShot(const ShotId& shot_id, const CameraId& camera_id,
                       const RigCameraId& rig_camera_id,
                       const RigInstanceId& instance_id) {
-  auto it_exist = shots_.find(shot_id);
-  if (it_exist == shots_.end())  // create
-  {
-    const auto& camera = GetCamera(camera_id);
-    auto& rig_instance = GetRigInstance(instance_id);
-    auto& rig_camera = GetRigCamera(rig_camera_id);
-    auto it = shots_.emplace(
-        std::piecewise_construct, std::forward_as_tuple(shot_id),
-        std::forward_as_tuple(shot_id, &camera, &rig_instance, &rig_camera));
-    return it.first->second;
-  } else {
+  if (shots_.find(shot_id) != shots_.end()) {
     throw std::runtime_error("Shot " + shot_id + " already exists.");
   }
+  const auto& camera = GetCamera(camera_id);
+  auto& rig_instance = GetRigInstance(instance_id);
+  auto& rig_camera = GetRigCamera(rig_camera_id);
+  auto it = shots_.emplace(std::piecewise_construct,
+                           std::forward_as_tuple(shot_id),
+                           std::forward_as_tuple(shot_id, &camera, &rig_instance, &rig_camera));
+  return it.first->second;
 }
 
 void Map::RemoveShot(const ShotId& shot_id) {
-  // 1) Find the point
-  const auto& shot_it = shots_.find(shot_id);
-  if (shot_it != shots_.end()) {
-    auto& shot = shot_it->second;
-    shot.GetRigInstance()->RemoveShot(shot_id);
-    // 2) Remove it from all the points
-    auto& lms_map = shot.GetLandmarkObservations();
-    for (auto& lm_obs : lms_map) {
-      lm_obs.first->RemoveObservation(&shot);
-    }
-    // 3) Remove from shots
-    shots_.erase(shot_it);
-  } else {
-    throw std::runtime_error("Accessing invalid ShotID " + shot_id);
+  auto shot_it = shots_.find(shot_id);
+  if (shot_it == shots_.end()) {
+    throw std::runtime_error("Invalid ShotID " + shot_id);
   }
+  Shot& shot = shot_it->second;
+  shot.GetRigInstance()->RemoveShot(shot_id);
+  for (auto& lm_obs : shot.GetLandmarkObservations()) {
+    lm_obs.first->RemoveObservation(&shot);
+  }
+  shots_.erase(shot_it);
 }
 
-/**
- * Creates a pano shot and returns a reference to it
- *
- * @param shot_id       unique id of the shot
- * @param camera_id     unique id of EXISTING camera
- * @param rig_camera_id unique id of EXISTING rig camera
- * @param instance_id   unique id of EXISTING rig instance
- * @param pose          position in the 3D world
- * @returns             returns reference to created or existing shot
- */
 Shot& Map::CreatePanoShot(const ShotId& shot_id, const CameraId& camera_id,
                           const RigCameraId& rig_camera_id,
                           const RigInstanceId& instance_id,
                           const ::geometry::Pose& pose) {
-  auto it_exist = pano_shots_.find(shot_id);
-  if (it_exist == pano_shots_.end()) {
-    const auto& camera = GetCamera(camera_id);
-    auto& rig_instance = GetRigInstance(instance_id);
-    auto& rig_camera = GetRigCamera(rig_camera_id);
-    auto it = pano_shots_.emplace(
-        std::piecewise_construct, std::forward_as_tuple(shot_id),
-        std::forward_as_tuple(shot_id, &camera, &rig_instance, &rig_camera,
-                              pose));
-    return it.first->second;
-  } else {
+  if (pano_shots_.find(shot_id) != pano_shots_.end()) {
     throw std::runtime_error("PanoShot " + shot_id + " already exists.");
   }
+  const auto& camera = GetCamera(camera_id);
+  auto& rig_instance = GetRigInstance(instance_id);
+  auto& rig_camera = GetRigCamera(rig_camera_id);
+  auto it = pano_shots_.emplace(std::piecewise_construct,
+                                std::forward_as_tuple(shot_id),
+                                std::forward_as_tuple(shot_id, &camera, &rig_instance, &rig_camera, pose));
+  return it.first->second;
 }
 
 void Map::RemovePanoShot(const ShotId& shot_id) {
-  const auto& shot_it = pano_shots_.find(shot_id);
-  if (shot_it != pano_shots_.end()) {
-    const auto& shot = shot_it->second;
-    shot.GetRigInstance()->RemoveShot(shot_id);
-    pano_shots_.erase(shot_it);
-  } else {
-    throw std::runtime_error("Accessing invalid ShotID " + shot_id);
+  auto shot_it = pano_shots_.find(shot_id);
+  if (shot_it == pano_shots_.end()) {
+    throw std::runtime_error("Invalid ShotID " + shot_id);
   }
+  const Shot& shot = shot_it->second;
+  shot.GetRigInstance()->RemoveShot(shot_id);
+  pano_shots_.erase(shot_it);
 }
 
-/**
- * Creates a landmark and returns a reference to it
- *
- * @param lm_Id       unique id of the landmark
- * @param global_pos  3D position of the landmark
- * @param name        name of the landmark
- *
- * @returns           reference to the created or already existing lm
- */
-Landmark& Map::CreateLandmark(const LandmarkId& lm_id,
-                              const Vec3d& global_pos) {
-  auto it_exist = landmarks_.find(lm_id);
-  if (it_exist == landmarks_.end()) {
-    auto it = landmarks_.emplace(std::piecewise_construct,
-                                 std::forward_as_tuple(lm_id),
-                                 std::forward_as_tuple(lm_id, global_pos));
-    return it.first->second;
-  } else {
+Landmark& Map::CreateLandmark(const LandmarkId& lm_id, const Vec3d& global_pos) {
+  if (landmarks_.find(lm_id) != landmarks_.end()) {
     throw std::runtime_error("Landmark " + lm_id + " already exists.");
   }
+  auto it = landmarks_.emplace(std::piecewise_construct,
+                               std::forward_as_tuple(lm_id),
+                               std::forward_as_tuple(lm_id, global_pos));
+  return it.first->second;
 }
 
 void Map::RemoveLandmark(const Landmark* const lm) {
-  if (lm != nullptr) {
-    RemoveLandmark(lm->id_);
-  } else {
+  if (!lm) {
     throw std::runtime_error("Nullptr landmark");
   }
+  RemoveLandmark(lm->id_);
 }
 
 void Map::RemoveLandmark(const LandmarkId& lm_id) {
-  // 1) Find the landmark
-  const auto& lm_it = landmarks_.find(lm_id);
-  if (lm_it != landmarks_.end()) {
-    const auto& landmark = lm_it->second;
-
-    // 2) Remove all its observation
-    const auto& observations = landmark.GetObservations();
-    for (const auto& obs : observations) {
-      Shot* shot = obs.first;
-      const auto feat_id = obs.second;
-      shot->RemoveLandmarkObservation(feat_id);
-    }
-
-    // 3) Remove from landmarks
-    landmarks_.erase(lm_it);
-  } else {
-    throw std::runtime_error("Accessing invalid LandmarkId " + lm_id);
+  auto lm_it = landmarks_.find(lm_id);
+  if (lm_it == landmarks_.end()) {
+    throw std::runtime_error("Invalid LandmarkId " + lm_id);
   }
+  const Landmark& lm = lm_it->second;
+  for (const auto& obs : lm.GetObservations()) {
+    Shot* shot = obs.first;
+    shot->RemoveLandmarkObservation(obs.second);
+  }
+  landmarks_.erase(lm_it);
 }
 
 ::geometry::Camera& Map::CreateCamera(const ::geometry::Camera& cam) {
-  auto it = cameras_.emplace(std::make_pair(cam.id, cam));
-  bias_.emplace(std::make_pair(cam.id, ::geometry::Similarity()));
+  auto it = cameras_.emplace(cam.id, cam);
+  bias_.emplace(cam.id, ::geometry::Similarity());
   return it.first->second;
 }
 
 ::geometry::Camera& Map::GetCamera(const CameraId& cam_id) {
   auto it = cameras_.find(cam_id);
   if (it == cameras_.end()) {
-    throw std::runtime_error("Accessing invalid CameraId " + cam_id);
+    throw std::runtime_error("Invalid CameraId " + cam_id);
   }
   return it->second;
 }
@@ -343,126 +280,110 @@ void Map::RemoveLandmark(const LandmarkId& lm_id) {
 const ::geometry::Camera& Map::GetCamera(const CameraId& cam_id) const {
   auto it = cameras_.find(cam_id);
   if (it == cameras_.end()) {
-    throw std::runtime_error("Accessing invalid CameraId " + cam_id);
+    throw std::runtime_error("Invalid CameraId " + cam_id);
   }
   return it->second;
 }
 
 void Map::UpdateShotWithRig(const Shot& other_shot, bool is_panoshot) {
-  const auto rig_instance = other_shot.GetRigInstance();
-  const auto& instance_id = rig_instance->id;
-  const bool has_instance = HasRigInstance(instance_id);
-  if (!has_instance) {
+  RigInstance* rig_instance = other_shot.GetRigInstance();
+  const RigInstanceId& instance_id = rig_instance->GetId();
+  if (!HasRigInstance(instance_id)) {
     CreateRigInstance(instance_id);
   }
-  for (const auto& instance_shot : rig_instance->GetShots()) {
-    const auto& shot_id = instance_shot.first;
-    const auto& shot = instance_shot.second;
-
+  for (const auto& shot_pair : rig_instance->GetShots()) {
+    const ShotId& shot_id = shot_pair.first;
+    Shot* shot = shot_pair.second;
     const auto camera = shot->GetCamera();
-    const auto& camera_id = camera->id;
+    const CameraId& camera_id = camera->id;
     if (!HasCamera(camera_id)) {
       CreateCamera(*camera);
     }
-
-    const auto rig_camera = shot->GetRigCamera();
-    const auto& rig_camera_id = rig_camera->id;
+    const RigCamera* rig_camera = shot->GetRigCamera();
+    const RigCameraId& rig_camera_id = rig_camera->id;
     if (!HasRigCamera(rig_camera_id)) {
       CreateRigCamera(*rig_camera);
     }
-
-    const bool has_shot = is_panoshot ? HasPanoShot(shot_id) : HasShot(shot_id);
-    if (!has_shot) {
+    bool exists = is_panoshot ? HasPanoShot(shot_id) : HasShot(shot_id);
+    if (!exists) {
       Shot* new_shot = nullptr;
       if (is_panoshot) {
-        new_shot = &CreatePanoShot(shot_id, camera_id, rig_camera_id,
-                                   instance_id, *shot->GetPose());
+        new_shot = &CreatePanoShot(shot_id, camera_id, rig_camera_id, instance_id, *shot->GetPose());
       } else {
-        new_shot = &CreateShot(shot_id, camera_id, rig_camera_id, instance_id,
-                               *shot->GetPose());
+        new_shot = &CreateShot(shot_id, camera_id, rig_camera_id, instance_id, *shot->GetPose());
       }
-      AssignShot(*new_shot, *shot);
+      ::AssignShot(*new_shot, *shot);
     }
   }
-  GetRigInstance(instance_id)
-      .UpdateInstancePoseWithShot(other_shot.id_, *other_shot.GetPose());
+  GetRigInstance(instance_id).UpdateInstancePoseWithShot(other_shot.GetId(), *other_shot.GetPose());
 }
 
 Shot& Map::UpdateShot(const Shot& other_shot) {
-  auto it_exist = shots_.find(other_shot.id_);
+  auto it_exist = shots_.find(other_shot.GetId());
   if (it_exist == shots_.end()) {
-    throw std::runtime_error("Shot " + other_shot.id_ + " does not exists.");
-  } else {
-    auto& shot = it_exist->second;
-    UpdateShotWithRig(other_shot, false);
-    AssignShot(shot, other_shot);
-    return shot;
+    throw std::runtime_error("Shot " + other_shot.GetId() + " does not exist.");
   }
+  Shot& shot = it_exist->second;
+  UpdateShotWithRig(other_shot, false);
+  ::AssignShot(shot, other_shot);
+  return shot;
 }
 
 Shot& Map::UpdatePanoShot(const Shot& other_shot) {
-  auto it_exist = pano_shots_.find(other_shot.id_);
+  auto it_exist = pano_shots_.find(other_shot.GetId());
   if (it_exist == pano_shots_.end()) {
-    throw std::runtime_error("Pano shot " + other_shot.id_ +
-                             " does not exists.");
-  } else {
-    auto& shot = it_exist->second;
-    UpdateShotWithRig(other_shot, true);
-    AssignShot(shot, other_shot);
-
-    return shot;
+    throw std::runtime_error("Pano shot " + other_shot.GetId() + " does not exist.");
   }
+  Shot& shot = it_exist->second;
+  UpdateShotWithRig(other_shot, true);
+  ::AssignShot(shot, other_shot);
+  return shot;
 }
 
-RigCamera& Map::CreateRigCamera(const map::RigCamera& rig_camera) {
-  auto it_exist = rig_cameras_.find(rig_camera.id);
-  if (it_exist != rig_cameras_.end()) {
+RigCamera& Map::CreateRigCamera(const RigCamera& rig_camera) {
+  if (rig_cameras_.find(rig_camera.id) != rig_cameras_.end()) {
     throw std::runtime_error("RigCamera " + rig_camera.id + " already exists.");
   }
-
-  auto it = rig_cameras_.emplace(std::make_pair(rig_camera.id, rig_camera));
+  auto it = rig_cameras_.emplace(rig_camera.id, rig_camera);
   return it.first->second;
 }
 
-RigInstance& Map::CreateRigInstance(const map::RigInstanceId& instance_id) {
-  auto it_exist = rig_instances_.find(instance_id);
-  if (it_exist != rig_instances_.end()) {
+RigInstance& Map::CreateRigInstance(const RigInstanceId& instance_id) {
+  if (rig_instances_.find(instance_id) != rig_instances_.end()) {
     throw std::runtime_error("RigInstance " + instance_id + " already exists.");
   }
-
-  // Create instance and add its shots
   auto it = rig_instances_.emplace(std::piecewise_construct,
                                    std::forward_as_tuple(instance_id),
                                    std::forward_as_tuple(instance_id));
   return it.first->second;
 }
 
-void Map::RemoveRigInstance(const map::RigInstanceId& instance_id) {
+void Map::RemoveRigInstance(const RigInstanceId& instance_id) {
   auto it_exist = rig_instances_.find(instance_id);
   if (it_exist == rig_instances_.end()) {
-    throw std::runtime_error("Rig instance does not exists.");
-  } else {
-    rig_instances_.erase(instance_id);
+    throw std::runtime_error("Rig instance does not exist.");
   }
+  rig_instances_.erase(it_exist);
 }
 
 RigInstance& Map::UpdateRigInstance(const RigInstance& other_rig_instance) {
-  auto it_exist = rig_instances_.find(other_rig_instance.id);
+  auto it_exist = rig_instances_.find(other_rig_instance.GetId());
   if (it_exist == rig_instances_.end()) {
-    throw std::runtime_error("Rig instance does not exists.");
-  } else {
-    auto& rig_instance = it_exist->second;
-    rig_instance = other_rig_instance;
-    return rig_instance;
+    throw std::runtime_error("Rig instance does not exist.");
   }
+  RigInstance& rig_instance = it_exist->second;
+  rig_instance = other_rig_instance;
+  return rig_instance;
 }
 
-size_t Map::NumberOfRigCameras() const { return rig_cameras_.size(); }
+size_t Map::NumberOfRigCameras() const {
+  return rig_cameras_.size();
+}
 
 RigCamera& Map::GetRigCamera(const RigCameraId& rig_camera_id) {
-  const auto& it = rig_cameras_.find(rig_camera_id);
+  auto it = rig_cameras_.find(rig_camera_id);
   if (it == rig_cameras_.end()) {
-    throw std::runtime_error("Accessing invalid RigCameraID " + rig_camera_id);
+    throw std::runtime_error("Invalid RigCameraID " + rig_camera_id);
   }
   return it->second;
 }
@@ -471,20 +392,22 @@ bool Map::HasRigCamera(const RigCameraId& rig_camera_id) const {
   return rig_cameras_.find(rig_camera_id) != rig_cameras_.end();
 }
 
-size_t Map::NumberOfRigInstances() const { return rig_instances_.size(); }
+size_t Map::NumberOfRigInstances() const {
+  return rig_instances_.size();
+}
 
 RigInstance& Map::GetRigInstance(const RigInstanceId& instance_id) {
-  const auto& it = rig_instances_.find(instance_id);
+  auto it = rig_instances_.find(instance_id);
   if (it == rig_instances_.end()) {
-    throw std::runtime_error("Accessing invalid RigInstance index");
+    throw std::runtime_error("Invalid RigInstance index");
   }
   return it->second;
 }
 
 const RigInstance& Map::GetRigInstance(const RigInstanceId& instance_id) const {
-  const auto& it = rig_instances_.find(instance_id);
+  auto it = rig_instances_.find(instance_id);
   if (it == rig_instances_.end()) {
-    throw std::runtime_error("Accessing invalid RigInstance index");
+    throw std::runtime_error("Invalid RigInstance index");
   }
   return it->second;
 }
@@ -494,101 +417,88 @@ bool Map::HasRigInstance(const RigInstanceId& instance_id) const {
 }
 
 ::geometry::Similarity& Map::GetBias(const CameraId& camera_id) {
-  const auto it = bias_.find(camera_id);
+  auto it = bias_.find(camera_id);
   if (it == bias_.end()) {
-    throw std::runtime_error("Accessing invalid CameraID " + camera_id);
+    throw std::runtime_error("Invalid CameraID " + camera_id);
   }
   return it->second;
 }
 
-void Map::SetBias(const CameraId& camera_id,
-                  const ::geometry::Similarity& transform) {
+void Map::SetBias(const CameraId& camera_id, const ::geometry::Similarity& transform) {
   auto it = bias_.find(camera_id);
   if (it == bias_.end()) {
-    throw std::runtime_error("Accessing invalid CameraID " + camera_id);
+    throw std::runtime_error("Invalid CameraID " + camera_id);
   }
   it->second = transform;
 }
 
-std::unordered_map<ShotId, std::unordered_map<LandmarkId, Vec2d> >
-Map::ComputeReprojectionErrors(const TracksManager& tracks_manager,
-                               const Map::ErrorType& error_type) const {
-  std::unordered_map<ShotId, std::unordered_map<LandmarkId, Vec2d> > errors;
-  for (const auto& shot_id : tracks_manager.GetShotIds()) {
-    const auto find_shot = shots_.find(shot_id);
-    if (find_shot == shots_.end()) {
+std::unordered_map<ShotId, std::unordered_map<LandmarkId, Vec2d>>
+Map::ComputeReprojectionErrors(const TracksManager& tracks_manager, const ErrorType& error_type) const {
+  std::unordered_map<ShotId, std::unordered_map<LandmarkId, Vec2d>> errors;
+  for (const ShotId& shot_id : tracks_manager.GetShotIds()) {
+    auto it_shot = shots_.find(shot_id);
+    if (it_shot == shots_.end()) {
       continue;
     }
-    const auto& shot = find_shot->second;
+    const Shot& shot = it_shot->second;
     auto& per_shot = errors[shot_id];
-    for (const auto& track_n_obs :
-         tracks_manager.GetShotObservations(shot_id)) {
-      const auto find_landmark = landmarks_.find(track_n_obs.first);
-      if (find_landmark == landmarks_.end()) {
+    for (const auto& obs_kv : tracks_manager.GetShotObservations(shot_id)) {
+      auto it_lm = landmarks_.find(obs_kv.first);
+      if (it_lm == landmarks_.end()) {
         continue;
       }
-
-      if (error_type == Map::ErrorType::Pixel) {
-        const Vec2d error_2d =
-            (track_n_obs.second.point -
-             shot.Project(find_landmark->second.GetGlobalPos()));
-        per_shot[track_n_obs.first] = error_2d;
+      if (error_type == ErrorType::Pixel) {
+        Vec2d err = obs_kv.second.point - shot.Project(it_lm->second.GetGlobalPos());
+        per_shot[obs_kv.first] = err;
       }
-      if (error_type == Map::ErrorType::Normalized) {
-        const Vec2d error_2d =
-            (track_n_obs.second.point -
-             shot.Project(find_landmark->second.GetGlobalPos()));
-        per_shot[track_n_obs.first] = error_2d / track_n_obs.second.scale;
+      if (error_type == ErrorType::Normalized) {
+        Vec2d err = obs_kv.second.point - shot.Project(it_lm->second.GetGlobalPos());
+        per_shot[obs_kv.first] = err / obs_kv.second.scale;
       }
-      if (error_type == Map::ErrorType::Angular) {
-        const Vec3d point =
-            (find_landmark->second.GetGlobalPos() - shot.GetPose()->GetOrigin())
-                .normalized();
-        const Vec3d bearing =
-            shot.Bearing(track_n_obs.second.point).normalized();
-        const double angle = std::acos(point.dot(bearing));
-        per_shot[track_n_obs.first] = Vec2d::Constant(angle);
+      if (error_type == ErrorType::Angular) {
+        Vec3d pt_cam = (it_lm->second.GetGlobalPos() - shot.GetPose()->GetOrigin()).normalized();
+        Vec3d bearing = shot.Bearing(obs_kv.second.point).normalized();
+        double angle = std::acos(pt_cam.dot(bearing));
+        per_shot[obs_kv.first] = Vec2d::Constant(angle);
       }
     }
   }
   return errors;
 }
 
-std::unordered_map<ShotId, std::unordered_map<LandmarkId, Observation> >
+std::unordered_map<ShotId, std::unordered_map<LandmarkId, Observation>>
 Map::GetValidObservations(const TracksManager& tracks_manager) const {
-  std::unordered_map<ShotId, std::unordered_map<LandmarkId, Observation> >
-      observations;
-  for (const auto& shot_id : tracks_manager.GetShotIds()) {
-    const auto find_shot = shots_.find(shot_id);
-    if (find_shot == shots_.end()) {
+  std::unordered_map<ShotId, std::unordered_map<LandmarkId, Observation>> valid_obs;
+  for (const ShotId& shot_id : tracks_manager.GetShotIds()) {
+    auto it_shot = shots_.find(shot_id);
+    if (it_shot == shots_.end()) {
       continue;
     }
-    auto& per_shot = observations[shot_id];
-    for (const auto& track_n_obs :
-         tracks_manager.GetShotObservations(shot_id)) {
-      const auto find_landmark = landmarks_.find(track_n_obs.first);
-      if (find_landmark == landmarks_.end()) {
+    auto& per_shot = valid_obs[shot_id];
+    for (const auto& obs_kv : tracks_manager.GetShotObservations(shot_id)) {
+      auto it_lm = landmarks_.find(obs_kv.first);
+      if (it_lm == landmarks_.end()) {
         continue;
       }
-      per_shot[track_n_obs.first] = track_n_obs.second;
+      per_shot[obs_kv.first] = obs_kv.second;
     }
   }
-  return observations;
+  return valid_obs;
 }
 
 TracksManager Map::ToTracksManager() const {
   TracksManager manager;
-  for (const auto& shot_pair : shots_) {
-    for (const auto& lm_obs : shot_pair.second.GetLandmarkObservations()) {
-      manager.AddObservation(shot_pair.first, lm_obs.first->id_, lm_obs.second);
+  for (const auto& shot_kv : shots_) {
+    for (const auto& lm_obs : shot_kv.second.GetLandmarkObservations()) {
+      manager.AddObservation(shot_kv.first, lm_obs.first->id_, lm_obs.second);
     }
   }
-  for (const auto& shot_pair : pano_shots_) {
-    for (const auto& lm_obs : shot_pair.second.GetLandmarkObservations()) {
-      manager.AddObservation(shot_pair.first, lm_obs.first->id_, lm_obs.second);
+  for (const auto& pano_kv : pano_shots_) {
+    for (const auto& lm_obs : pano_kv.second.GetLandmarkObservations()) {
+      manager.AddObservation(pano_kv.first, lm_obs.first->id_, lm_obs.second);
     }
   }
   return manager;
 }
 
-};  // namespace map
+}  // namespace sfmmap
