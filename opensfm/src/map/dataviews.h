@@ -1,4 +1,8 @@
 #pragma once
+
+// Include full map definition because we reference Map::XMap aliases
+#include <map/map.h>
+
 #include <geometry/camera.h>
 #include <geometry/similarity.h>
 #include <map/landmark.h>
@@ -10,17 +14,12 @@
 
 namespace map {
 
-class Map;
-
 // ---------- ShotView ----------
 class ShotView {
  public:
   explicit ShotView(Map& map);
   Shot& GetShot(const map::ShotId& shot_id);
   bool HasShot(const map::ShotId& shot_id) const;
-
-  // IMPORTANT: return the alias types from Map, not raw unordered_map,
-  // so the Eigen aligned_allocator matches exactly.
   const Map::ShotMap& GetShots() const;
   size_t NumberOfShots() const;
 
@@ -59,7 +58,7 @@ class CameraView {
  public:
   explicit CameraView(Map& map);
   size_t NumberOfCameras() const;
-  geometry::Camera& GetCamera(const CameraId& cam_id);
+  ::geometry::Camera& GetCamera(const CameraId& cam_id);
   const Map::CameraMap& GetCameras() const;
   bool HasCamera(const CameraId& cam_id) const;
 
@@ -98,7 +97,7 @@ class BiasView {
  public:
   explicit BiasView(Map& map);
   size_t NumberOfBiases() const;
-  geometry::Similarity& GetBias(const CameraId& cam_id);
+  ::geometry::Similarity& GetBias(const CameraId& cam_id);
   const Map::BiasMap& GetBiases() const;
   bool HasBias(const CameraId& cam_id) const;
 
