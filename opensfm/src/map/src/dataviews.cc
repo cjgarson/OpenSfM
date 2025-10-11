@@ -1,3 +1,4 @@
+#include <map/map.h>
 #include <map/dataviews.h>
 
 namespace map {
