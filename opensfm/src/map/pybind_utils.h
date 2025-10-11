@@ -16,19 +16,19 @@ PYBIND11_NAMESPACE_BEGIN_(PYBIND11_NAMESPACE)
 PYBIND11_NAMESPACE_BEGIN_(detail)
 
 // -----------------------------------------------------------------------------
-// Fix list caster for sfmmap::map::Landmark
+// Fix list caster for sfmmap::Map::Landmark
 // -----------------------------------------------------------------------------
 using ListCasterBase =
-    pybind11::detail::list_caster<std::vector<sfmmap::map::Landmark*>,
-                                  sfmmap::map::Landmark*>;
+    pybind11::detail::list_caster<std::vector<sfmmap::Map::Landmark*>,
+                                  sfmmap::Map::Landmark*>;
 
 template <>
-struct type_caster<std::vector<sfmmap::map::Landmark*>> : ListCasterBase {
-  static handle cast(const std::vector<sfmmap::map::Landmark*>& src,
+struct type_caster<std::vector<sfmmap::Map::Landmark*>> : ListCasterBase {
+  static handle cast(const std::vector<sfmmap::Map::Landmark*>& src,
                      return_value_policy, handle parent) {
     return ListCasterBase::cast(src, return_value_policy::reference, parent);
   }
-  static handle cast(const std::vector<sfmmap::map::Landmark*>* src,
+  static handle cast(const std::vector<sfmmap::Map::Landmark*>* src,
                      return_value_policy pol, handle parent) {
     return cast(*src, pol, parent);
   }
