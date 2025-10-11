@@ -4,6 +4,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+using namespace sfmmap;
+
 namespace sfm {
 namespace tracks_helpers {
 
