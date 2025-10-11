@@ -196,5 +196,5 @@ PYBIND11_MODULE(pymap, m) {
            [](sfmmap::Map& m)
              -> const sfmmap::Map::LandmarkMap& {
              return m.GetLandmarks();
-           }, py::return_value_policy::reference_internal)
+           }, py::return_value_policy::reference_internal);
 }
