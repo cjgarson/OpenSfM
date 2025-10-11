@@ -7,7 +7,7 @@
 #include <set>
 #include <string>
 
-namespace map {
+namespace sfmmap {
 
 // Forward declarations to avoid heavy includes and circular deps.
 class Shot;
