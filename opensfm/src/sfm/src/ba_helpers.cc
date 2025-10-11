@@ -325,7 +325,7 @@ py::tuple BAHelpers::BundleLocal(
 // -----------------------------------------------------------------------------
 bool BAHelpers::TriangulateGCP(
     const sfmmap::GroundControlPoint& point,
-    const std::unordered_map<sfmmap::ShotId, sfmmap::Shot>& shots,
+    const sfmmap::Map::ShotMap& shots,
     Vec3d& coordinates) {
   constexpr auto reproj_threshold{1.0};
   constexpr auto min_ray_angle = 0.1 * M_PI / 180.0;
