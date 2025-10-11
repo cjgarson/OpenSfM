@@ -1,7 +1,7 @@
 #pragma once
 
 #include <map/defines.h>       // ShotId, RigCameraId, RigInstanceId
-#include <geometry/camera.h>   // geometry::Pose (via camera or pose header)
+#include <geometry/camera.h>   // ::geometry::Pose (via camera or pose header)
 #include <geometry/pose.h>
 #include <unordered_map>
 #include <set>
@@ -17,7 +17,7 @@ class Shot;
  */
 struct RigCamera {
   RigCameraId id;
-  geometry::Pose pose;
+  ::geometry::Pose pose;
 };
 
 /**
@@ -32,9 +32,9 @@ class RigInstance {
   const RigInstanceId& GetId() const { return id_; }
 
   // Global pose of this rig instance (world←instance)
-  const geometry::Pose& GetPose() const { return pose_; }
-  geometry::Pose& GetPose() { return pose_; }
-  void SetPose(const geometry::Pose& p) { pose_ = p; }
+  const ::geometry::Pose& GetPose() const { return pose_; }
+  ::geometry::Pose& GetPose() { return pose_; }
+  void SetPose(const ::geometry::Pose& p) { pose_ = p; }
 
   // Manage association of shots to this rig instance
   void AddShot(RigCamera* rig_camera, Shot* shot);
@@ -46,12 +46,12 @@ class RigInstance {
 
   // Utility methods
   std::set<ShotId> GetShotIDs() const;
-  void UpdateInstancePoseWithShot(const ShotId& shot_id, const geometry::Pose& new_shot_pose);
-  void UpdateRigCameraPose(const RigCameraId& rig_camera_id, const geometry::Pose& new_pose);
+  void UpdateInstancePoseWithShot(const ShotId& shot_id, const ::geometry::Pose& new_shot_pose);
+  void UpdateRigCameraPose(const RigCameraId& rig_camera_id, const ::geometry::Pose& new_pose);
 
  private:
   RigInstanceId id_;
-  geometry::Pose pose_;
+  ::geometry::Pose pose_;
   std::unordered_map<ShotId, Shot*> shots_;            // shot ID -> Shot*
   std::unordered_map<ShotId, RigCamera*> shot_to_rig_; // shot ID -> RigCamera*
 };
