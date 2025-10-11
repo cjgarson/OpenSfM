@@ -11,9 +11,9 @@
 namespace {
 bool IsSingleShotRig(const map::RigInstance* rig_instance,
                      const map::RigCamera* rig_camera) {
+  if (!rig_instance || !rig_camera) return false;
   const bool has_identity_rig_camera = rig_camera->pose.IsIdentity();
-  const bool is_single_shot_instance =
-      rig_instance && rig_instance->GetShots().size() == 1;
+  const bool is_single_shot_instance = rig_instance->GetShots().size() == 1;
   return has_identity_rig_camera && is_single_shot_instance;
 }
 }  // namespace
@@ -45,9 +45,7 @@ Shot::Shot(const ShotId& shot_id,
       rig_instance_(rig_instance),
       rig_camera_(rig_camera),
       shot_camera_(shot_camera) {
-  if (rig_instance_) {
-    rig_instance_->AddShot(rig_camera_, this);
-  }
+  if (rig_instance_) rig_instance_->AddShot(rig_camera_, this);
 }
 
 Shot::Shot(const ShotId& shot_id,
@@ -73,41 +71,27 @@ void Shot::SetRig(RigInstance* rig_instance, RigCamera* rig_camera) {
 }
 
 const RigInstanceId& Shot::GetRigInstanceId() const {
-  if (!rig_instance_) {
-    throw std::runtime_error("Shot has no rig instance.");
-  }
+  if (!rig_instance_) throw std::runtime_error("Shot has no rig instance.");
   return rig_instance_->GetId();
 }
 
 const RigCameraId& Shot::GetRigCameraId() const {
-  if (!rig_camera_) {
-    throw std::runtime_error("Shot has no rig camera.");
-  }
+  if (!rig_camera_) throw std::runtime_error("Shot has no rig camera.");
   return rig_camera_->id;
 }
 
 void ShotMeasurements::Set(const ShotMeasurements& other) {
-  capture_time_ = other.capture_time_;
-  gps_position_ = other.gps_position_;
-  gps_accuracy_ = other.gps_accuracy_;
-  opk_angles_ = other.opk_angles_;
-  opk_accuracy_ = other.opk_accuracy_;
-  compass_accuracy_ = other.compass_accuracy_;
-  compass_angle_ = other.compass_angle_;
-  gravity_down_ = other.gravity_down_;
-  orientation_ = other.orientation_;
-  sequence_key_ = other.sequence_key_;
-  attributes_ = other.GetAttributes();
+  *this = other;  // Copy trivially: OptionalValues and map are value types
 }
 
 void Shot::RemoveLandmarkObservation(const FeatureId id) {
-  const auto find_feature = landmark_id_.find(id);
-  if (find_feature == landmark_id_.end()) {
+  const auto it = landmark_id_.find(id);
+  if (it == landmark_id_.end()) {
     throw std::runtime_error("Can't find Feature ID " + std::to_string(id) +
                              " in Shot " + id_);
   }
-  auto* lm = find_feature->second;
-  landmark_id_.erase(id);
+  auto* lm = it->second;
+  landmark_id_.erase(it);
   landmark_observations_.erase(lm);
 }
 
@@ -116,18 +100,16 @@ void Shot::SetPose(const geometry::Pose& pose) {
     *pose_ = pose;
     return;
   }
-
   if (!IsSingleShotRig(rig_instance_, rig_camera_)) {
     throw std::runtime_error(
         "Can't set the pose of a shot belonging to a multi-shot rig instance");
   }
-
   rig_instance_->SetPose(pose);
   *pose_ = pose;
 }
 
 geometry::Pose Shot::GetPoseInRig() const {
-  // pose(shot) = pose(instance) * pose(rig_camera)
+  // world←camera = (world←instance) * (instance←camera)
   const auto& pose_instance = rig_instance_->GetPose();
   const auto& rig_camera_pose = rig_camera_->pose;
   return pose_instance.Compose(rig_camera_pose);
@@ -161,9 +143,8 @@ Vec2d Shot::Project(const Vec3d& global_pos) const {
 
 MatX2d Shot::ProjectMany(const MatX3d& points) const {
   MatX2d projected(points.rows(), 2);
-  for (int i = 0; i < points.rows(); ++i) {
+  for (int i = 0; i < points.rows(); ++i)
     projected.row(i) = Project(points.row(i));
-  }
   return projected;
 }
 
@@ -173,9 +154,8 @@ Vec3d Shot::Bearing(const Vec2d& point) const {
 
 MatX3d Shot::BearingMany(const MatX2d& points) const {
   MatX3d bearings(points.rows(), 3);
-  for (int i = 0; i < points.rows(); ++i) {
+  for (int i = 0; i < points.rows(); ++i)
     bearings.row(i) = Bearing(points.row(i));
-  }
   return bearings;
 }
 
