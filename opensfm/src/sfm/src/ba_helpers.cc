@@ -1,4 +1,5 @@
 // src/sfm/src/ba_helpers.cc
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -9,15 +10,20 @@
 
 #include <foundation/types.h>
 #include <geometry/triangulation.h>
+
 #include <map/ground_control_points.h>
 #include <map/landmark.h>
 #include <map/map.h>
-#include <map/rig.h>
 #include <map/shot.h>
+#include <map/rig.h> // harmless even if not used; avoids forward-decl issues in some forks
+
 #include <sfm/ba_helpers.h>
 
-// Do NOT use 'using namespace' for geometry; there is also sfmmap::geometry.
+namespace py = pybind11;
+
 namespace sfm {
+
+// ------------------------- helpers: neighborhoods ----------------------------
 
 std::pair<std::unordered_set<sfmmap::ShotId>, std::unordered_set<sfmmap::ShotId>>
 BAHelpers::ShotNeighborhoodIds(sfmmap::Map& map,
@@ -26,17 +32,20 @@ BAHelpers::ShotNeighborhoodIds(sfmmap::Map& map,
                                size_t min_common_points,
                                size_t max_interior_size) {
   auto res = ShotNeighborhood(map, central_shot_id, radius, min_common_points, max_interior_size);
+
   std::unordered_set<sfmmap::ShotId> interior;
   interior.reserve(res.first.size());
-  for (sfmmap::Shot* shot : res.first) {
-    interior.insert(shot->GetId());
+  for (sfmmap::Shot* s : res.first) {
+    interior.insert(s->GetId());
   }
+
   std::unordered_set<sfmmap::ShotId> boundary;
   boundary.reserve(res.second.size());
-  for (sfmmap::Shot* shot : res.second) {
-    boundary.insert(shot->GetId());
+  for (sfmmap::Shot* s : res.second) {
+    boundary.insert(s->GetId());
   }
-  return std::make_pair(std::move(interior), std::move(boundary));
+
+  return {std::move(interior), std::move(boundary)};
 }
 
 std::pair<std::unordered_set<sfmmap::Shot*>, std::unordered_set<sfmmap::Shot*>>
@@ -45,30 +54,22 @@ BAHelpers::ShotNeighborhood(sfmmap::Map& map,
                             size_t radius,
                             size_t min_common_points,
                             size_t max_interior_size) {
-  constexpr size_t kMaxBoundarySize = 1000000;
-
   std::unordered_set<sfmmap::Shot*> interior;
   interior.reserve(max_interior_size);
 
-  // Map::GetShot returns Shot&, take address for our Shot* set.
-  sfmmap::Shot& central_shot = map.GetShot(central_shot_id);
-  // If this shot is part of a rig, include sibling shots in same instance.
-  if (central_shot.HasRig()) {
-    const auto& instance = map.GetRigInstance(central_shot.GetRigInstanceId());
-    for (const auto& sid : instance.GetShotIDs()) {
-      interior.insert(&map.GetShot(sid));
-    }
-  }
-  interior.insert(&central_shot);
+  // Map::GetShot returns Shot& in your fork; our set holds Shot*
+  sfmmap::Shot& central = map.GetShot(central_shot_id);
+  interior.insert(&central);
 
   for (size_t d = 1; d < radius && interior.size() < max_interior_size; ++d) {
     const auto remaining = max_interior_size - interior.size();
-    const auto neighbors = DirectShotNeighbors(map, interior, min_common_points, remaining);
+    auto neighbors = DirectShotNeighbors(map, interior, min_common_points, remaining);
     interior.insert(neighbors.begin(), neighbors.end());
   }
 
-  const auto boundary = DirectShotNeighbors(map, interior, 1, kMaxBoundarySize);
-  return std::make_pair(std::move(interior), std::move(boundary));
+  // boundary: direct neighbors with a low threshold
+  auto boundary = DirectShotNeighbors(map, interior, /*min_common_points=*/1, /*max_neighbors=*/max_interior_size * 3);
+  return {std::move(interior), std::move(boundary)};
 }
 
 std::unordered_set<sfmmap::Shot*>
@@ -77,40 +78,49 @@ BAHelpers::DirectShotNeighbors(sfmmap::Map& /*map*/,
                                size_t min_common_points,
                                size_t max_neighbors) {
   std::unordered_set<sfmmap::Landmark*> points;
+  points.reserve(1024);
+
   for (auto* shot : shot_ids) {
-    for (const auto& kv : shot->GetLandmarkObservations()) {  // map<Landmark*, Observation>
+    // map<Landmark*, Observation>
+    for (const auto& kv : shot->GetLandmarkObservations()) {
       points.insert(kv.first);
     }
   }
 
   std::unordered_map<sfmmap::Shot*, size_t> common_points;
+  common_points.reserve(points.size() * 2);
+
   for (auto* lm : points) {
-    for (const auto& it : lm->GetObservations()) {  // map<Shot*, FeatureId>
-      auto* nshot = it.first;
+    // map<Shot*, FeatureId>
+    for (const auto& obs : lm->GetObservations()) {
+      auto* nshot = obs.first;
       if (shot_ids.find(nshot) == shot_ids.end()) {
         ++common_points[nshot];
       }
     }
   }
 
-  std::vector<std::pair<sfmmap::Shot*, size_t>> pairs;
-  pairs.reserve(common_points.size());
+  std::vector<std::pair<sfmmap::Shot*, size_t>> ranked;
+  ranked.reserve(common_points.size());
   for (const auto& kv : common_points) {
-    if (kv.second >= min_common_points) pairs.emplace_back(kv.first, kv.second);
+    if (kv.second >= min_common_points) ranked.emplace_back(kv.first, kv.second);
   }
-  std::sort(pairs.begin(), pairs.end(),
+
+  std::sort(ranked.begin(), ranked.end(),
             [](const auto& a, const auto& b) { return a.second > b.second; });
 
-  std::unordered_set<sfmmap::Shot*> neighbors;
-  neighbors.reserve(std::min(pairs.size(), max_neighbors));
-  for (size_t i = 0; i < pairs.size() && neighbors.size() < max_neighbors; ++i) {
-    neighbors.insert(pairs[i].first);
+  std::unordered_set<sfmmap::Shot*> out;
+  out.reserve(std::min(ranked.size(), static_cast<size_t>(max_neighbors)));
+  for (size_t i = 0; i < ranked.size() && out.size() < max_neighbors; ++i) {
+    out.insert(ranked[i].first);
   }
 
-  return neighbors;
+  return out;
 }
 
-// --- Use your typedefs from map_types.h here (prevents template/ABI mismatches) ---
+// ---------------------------- bundle entry points ----------------------------
+
+// NOTE: match header exactly — const refs for priors and GCP vector
 py::tuple BAHelpers::BundleLocal(
     sfmmap::Map& map,
     const sfmmap::CameraMap& camera_priors,
@@ -119,11 +129,9 @@ py::tuple BAHelpers::BundleLocal(
     const sfmmap::ShotId& central_shot_id,
     const py::dict& config) {
 
-  py::dict report;
-  report["status"] = "ok";
-
   auto neighborhood = ShotNeighborhood(
-      map, central_shot_id,
+      map,
+      central_shot_id,
       config.contains("local_bundle_radius") ? config["local_bundle_radius"].cast<size_t>() : 1,
       config.contains("local_bundle_min_common_points") ? config["local_bundle_min_common_points"].cast<size_t>() : 20,
       config.contains("local_bundle_max_shots") ? config["local_bundle_max_shots"].cast<size_t>() : 1000);
@@ -131,6 +139,8 @@ py::tuple BAHelpers::BundleLocal(
   const auto& interior = neighborhood.first;
   const auto& boundary = neighborhood.second;
 
+  py::dict report;
+  report["status"]                 = "ok";
   report["num_interior_images"]    = static_cast<int>(interior.size());
   report["num_boundary_images"]    = static_cast<int>(boundary.size());
   report["num_gcps"]               = static_cast<int>(gcp.size());
@@ -145,24 +155,28 @@ bool BAHelpers::TriangulateGCP(
     const sfmmap::Map::ShotMap& shots,
     Vec3d& coordinates) {
 
+  // In your fork, GCP stores observations in 'observations_' (public)
+  const auto& obs = point.observations_;
+  if (obs.size() < 2) return false;
+
   MatX3d bearings;
   MatX3d centers;
-  const auto& obs = point.observations_;  // public field in this fork
-  const size_t N = obs.size();
-  bearings.resize(N, 3);
-  centers.resize(N, 3);
+  bearings.resize(obs.size(), 3);
+  centers.resize(obs.size(), 3);
 
   size_t i = 0;
   for (const auto& o : obs) {
     auto it = shots.find(o.shot_id_);
     if (it == shots.end()) continue;
+
     const sfmmap::Shot& shot = it->second;
 
+    // Your Shot exposes Bearing(projection) and Pose as pointer
     const Eigen::Vector3d b = shot.Bearing(o.projection_);
-    bearings.row(i) = b;
-
     const Eigen::Vector3d c = shot.GetPose()->GetOrigin();
-    centers.row(i) = c;
+
+    bearings.row(i) = b;
+    centers.row(i)  = c;
     ++i;
   }
 
@@ -171,26 +185,11 @@ bool BAHelpers::TriangulateGCP(
   bearings.conservativeResize(i, Eigen::NoChange);
   centers.conservativeResize(i, Eigen::NoChange);
 
-  Eigen::Vector3d X(0,0,0);
-  if (i == 2) {
-    Eigen::Matrix<double,2,3> C;
-    C << centers.row(0), centers.row(1);
-    Eigen::Matrix<double,2,3> B;
-    B << bearings.row(0), bearings.row(1);
-    auto ok_X = ::geometry::TriangulateTwoBearingsMidpointSolve<double>(C, B);
-    X = ok_X.second;
-  } else {
-    std::vector<Eigen::Matrix<double,3,4>> Rts(i, Eigen::Matrix<double,3,4>::Zero());
-    for (size_t k = 0; k < i; ++k) {
-      Rts[k].setIdentity();
-      Rts[k].col(3) = -centers.row(k).transpose();
-    }
-    auto ok_X = ::geometry::TriangulateBearingsDLT(Rts, bearings, 4.0, 1e-6);
-    if (!ok_X.first) return false;
-    X = ok_X.second;
-  }
+  // Disambiguate global namespace 'geometry' (conflicts with any local symbol)
+  auto result = ::geometry::TriangulateBearingsMidpoint(centers, bearings);
+  if (!result.first) return false;
 
-  coordinates = X;
+  coordinates = result.second;
   return true;
 }
 
@@ -212,15 +211,17 @@ py::dict BAHelpers::BundleShotPoses(
     const sfmmap::RigCameraMap& /*rig_camera_priors*/,
     const py::dict& /*config*/) {
   py::dict report;
-  report["status"] = "ok";
+  report["status"]    = "ok";
   report["num_shots"] = static_cast<int>(shot_ids.size());
   return report;
 }
 
+// ------------------------------- misc / stubs --------------------------------
+
 void BAHelpers::BundleToMap(const bundle::BundleAdjuster& /*bundle_adjuster*/,
                             sfmmap::Map& /*output_map*/,
                             bool /*update_cameras*/) {
-  // no-op
+  // no-op in this forked helper
 }
 
 std::string BAHelpers::DetectAlignmentConstraints(
