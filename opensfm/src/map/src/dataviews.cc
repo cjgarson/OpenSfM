@@ -1,4 +1,4 @@
-#include <map/map.h>
+#include <map/dataviews.h>
 
 namespace map {
 
@@ -26,14 +26,14 @@ size_t LandmarkView::NumberOfLandmarks() const { return map_.NumberOfLandmarks()
 // ---------- CameraView ----------
 CameraView::CameraView(Map& map) : map_(map) {}
 size_t CameraView::NumberOfCameras() const { return map_.NumberOfCameras(); }
-geometry::Camera& CameraView::GetCamera(const CameraId& cam_id) { return map_.GetCamera(cam_id); }
+::geometry::Camera& CameraView::GetCamera(const CameraId& cam_id) { return map_.GetCamera(cam_id); }
 const Map::CameraMap& CameraView::GetCameras() const { return map_.GetCameras(); }
 bool CameraView::HasCamera(const CameraId& cam_id) const { return map_.HasCamera(cam_id); }
 
 // ---------- BiasView ----------
 BiasView::BiasView(Map& map) : map_(map) {}
 size_t BiasView::NumberOfBiases() const { return map_.NumberOfBiases(); }
-geometry::Similarity& BiasView::GetBias(const CameraId& cam_id) { return map_.GetBias(cam_id); }
+::geometry::Similarity& BiasView::GetBias(const CameraId& cam_id) { return map_.GetBias(cam_id); }
 const Map::BiasMap& BiasView::GetBiases() const { return map_.GetBiases(); }
 bool BiasView::HasBias(const CameraId& cam_id) const { return map_.HasBias(cam_id); }
 
