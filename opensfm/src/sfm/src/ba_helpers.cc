@@ -12,6 +12,8 @@
 #include "geo/geo.h"
 #include "map/defines.h"
 
+using namespace sfmmap;
+
 namespace sfm {
 
 std::pair<std::unordered_set<map::Map::ShotId>, std::unordered_set<map::Map::ShotId>>
