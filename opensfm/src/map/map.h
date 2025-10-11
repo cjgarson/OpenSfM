@@ -12,9 +12,6 @@
 #include <map/shot.h>
 #include <map/tracks_manager.h>
 
-// IMPORTANT: bring the view class declarations before we return them
-#include <map/dataviews.h>
-
 #include <Eigen/Core>
 #include <Eigen/StdVector>
 #include <map>
@@ -23,6 +20,14 @@
 #include <unordered_map>
 
 namespace map {
+
+class CameraView;
+class ShotView;
+class PanoShotView;
+class LandmarkView;
+class BiasView;
+class RigCameraView;
+class RigInstanceView;
 
 class Map {
  public:
