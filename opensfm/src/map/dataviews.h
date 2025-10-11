@@ -1,110 +1,104 @@
 #pragma once
+
 #include <geometry/camera.h>
 #include <geometry/similarity.h>
-#include <map/defines.h>
-#include <map/rig.h>
-#include <map/shot.h>
 #include <map/landmark.h>
-#include <Eigen/Core>
+#include <map/rig.h>
+#include <map/map_types.h>  // gives ShotMap, CameraMap, BiasMap, etc.
+
 #include <unordered_map>
 
 namespace map {
 
-// Forward declaration
+// Forward-declare Map to avoid circular includes.
+// Definitions live in dataviews.cc, which includes <map/map.h>.
 class Map;
 
-// Forward declarations of aligned alias types used in signatures
-using CameraId = std::string;
-using ShotId = std::string;
-using LandmarkId = std::string;
-using RigCameraId = std::string;
-using RigInstanceId = std::string;
-
-// ---------- ShotView ----------
+/* ------------ ShotView ------------ */
 class ShotView {
  public:
   explicit ShotView(Map& map);
-  Shot& GetShot(const map::ShotId& shot_id);
-  bool HasShot(const map::ShotId& shot_id) const;
-  const Map::ShotMap& GetShots() const;
+  Shot& GetShot(const ShotId& shot_id);
+  bool HasShot(const ShotId& shot_id) const;
+  const ShotMap& GetShots() const;
   size_t NumberOfShots() const;
 
  private:
   Map& map_;
 };
 
-// ---------- PanoShotView ----------
+/* ------------ PanoShotView ------------ */
 class PanoShotView {
  public:
   explicit PanoShotView(Map& map);
-  Shot& GetShot(const map::ShotId& shot_id);
-  bool HasShot(const map::ShotId& shot_id) const;
-  const Map::ShotMap& GetShots() const;
+  Shot& GetShot(const ShotId& shot_id);
+  bool HasShot(const ShotId& shot_id) const;
+  const ShotMap& GetShots() const;
   size_t NumberOfShots() const;
 
  private:
   Map& map_;
 };
 
-// ---------- LandmarkView ----------
+/* ------------ LandmarkView ------------ */
 class LandmarkView {
  public:
   explicit LandmarkView(Map& map);
   Landmark& GetLandmark(const LandmarkId& lm_id);
   bool HasLandmark(const LandmarkId& lm_id) const;
-  const Map::LandmarkMap& GetLandmarks() const;
+  const LandmarkMap& GetLandmarks() const;
   size_t NumberOfLandmarks() const;
 
  private:
   Map& map_;
 };
 
-// ---------- CameraView ----------
+/* ------------ CameraView ------------ */
 class CameraView {
  public:
   explicit CameraView(Map& map);
   size_t NumberOfCameras() const;
-  ::geometry::Camera& GetCamera(const CameraId& cam_id);
-  const Map::CameraMap& GetCameras() const;
+  geometry::Camera& GetCamera(const CameraId& cam_id);
+  const CameraMap& GetCameras() const;
   bool HasCamera(const CameraId& cam_id) const;
 
  private:
   Map& map_;
 };
 
-// ---------- RigCameraView ----------
+/* ------------ RigCameraView ------------ */
 class RigCameraView {
  public:
   explicit RigCameraView(Map& map);
   size_t NumberOfRigCameras() const;
   RigCamera& GetRigCamera(const RigCameraId& rig_camera_id);
-  const Map::RigCameraMap& GetRigCameras() const;
+  const RigCameraMap& GetRigCameras() const;
   bool HasRigCamera(const RigCameraId& rig_camera_id) const;
 
  private:
   Map& map_;
 };
 
-// ---------- RigInstanceView ----------
+/* ------------ RigInstanceView ------------ */
 class RigInstanceView {
  public:
   explicit RigInstanceView(Map& map);
   size_t NumberOfRigInstances() const;
   RigInstance& GetRigInstance(const RigInstanceId& instance_id);
-  const Map::RigInstanceMap& GetRigInstances() const;
+  const RigInstanceMap& GetRigInstances() const;
   bool HasRigInstance(const RigInstanceId& instance_id) const;
 
  private:
   Map& map_;
 };
 
-// ---------- BiasView ----------
+/* ------------ BiasView ------------ */
 class BiasView {
  public:
   explicit BiasView(Map& map);
   size_t NumberOfBiases() const;
-  ::geometry::Similarity& GetBias(const CameraId& cam_id);
-  const Map::BiasMap& GetBiases() const;
+  geometry::Similarity& GetBias(const CameraId& cam_id);
+  const BiasMap& GetBiases() const;
   bool HasBias(const CameraId& cam_id) const;
 
  private:
