@@ -15,9 +15,7 @@
 PYBIND11_NAMESPACE_BEGIN_(PYBIND11_NAMESPACE)
 PYBIND11_NAMESPACE_BEGIN_(detail)
 
-// -----------------------------------------------------------------------------
-// Fix list caster for sfmmap::Landmark* lists
-// -----------------------------------------------------------------------------
+// A minimal caster for std::vector<sfmmap::Landmark*> used in a few bindings.
 using ListCasterBase =
     pybind11::detail::list_caster<std::vector<sfmmap::Landmark*>,
                                   sfmmap::Landmark*>;
@@ -25,11 +23,10 @@ using ListCasterBase =
 template <>
 struct type_caster<std::vector<sfmmap::Landmark*>> : ListCasterBase {
   static handle cast(const std::vector<sfmmap::Landmark*>& src,
-                     return_value_policy policy, handle parent) {
+                     return_value_policy /*pol*/, handle parent) {
     return ListCasterBase::cast(src, return_value_policy::reference, parent);
   }
 };
-// -----------------------------------------------------------------------------
 
 PYBIND11_NAMESPACE_END_(detail)
 PYBIND11_NAMESPACE_END_(PYBIND11_NAMESPACE)
