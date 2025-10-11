@@ -3,7 +3,7 @@
 #include <geometry/pose.h>
 #include <stdexcept>
 
-namespace map {
+namespace sfmmap {
 
 void RigInstance::AddShot(RigCamera* rig_camera, Shot* shot) {
   if (!rig_camera || !shot) {
