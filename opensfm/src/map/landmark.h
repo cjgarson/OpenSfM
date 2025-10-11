@@ -6,7 +6,7 @@
 #include <map>
 #include <memory>
 #include <unordered_map>
-namespace map {
+namespace sfmmap {
 class Shot;
 
 class Landmark {
