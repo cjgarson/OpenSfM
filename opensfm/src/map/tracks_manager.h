@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace map {
+namespace sfmmap {
 class TracksManager {
  public:
   void AddObservation(const ShotId& shot_id, const TrackId& track_id,
