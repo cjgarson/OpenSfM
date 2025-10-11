@@ -1,6 +1,6 @@
 #include <map/dataviews.h>
 
-namespace map {
+namespace sfmmap {
 
 // ---------- ShotView ----------
 ShotView::ShotView(Map& map) : map_(map) {}
