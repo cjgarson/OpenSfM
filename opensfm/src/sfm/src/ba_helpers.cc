@@ -118,7 +118,7 @@ BAHelpers::DirectShotNeighbors(sfmmap::Map& map,
 }
 
 // -----------------------------------------------------------------------------
-// Local bundle (kept from your previous working version)
+// Local bundle
 // -----------------------------------------------------------------------------
 py::tuple BAHelpers::BundleLocal(
     sfmmap::Map& map,
@@ -215,7 +215,7 @@ py::tuple BAHelpers::BundleLocal(
     }
   }
 
-  // Observations (interior first, then add boundary tracks already present)
+  // Observations
   for (auto* shot : interior) {
     for (const auto& lm_obs : shot->GetLandmarkObservations()) {
       auto* lm = lm_obs.first;
@@ -271,14 +271,12 @@ py::tuple BAHelpers::BundleLocal(
 
   const auto timer_run = std::chrono::high_resolution_clock::now();
 
-  // Copy rig instance poses back
   for (const auto& rig_instance_id : rig_instances_ids) {
     auto& instance = map.GetRigInstance(rig_instance_id);
     auto i = ba.GetRigInstance(rig_instance_id);
     instance.SetPose(i.GetValue());
   }
 
-  // Copy points back
   for (auto* point : points) {
     const auto& pt = ba.GetPoint(point->id_);
     point->SetGlobalPos(pt.GetValue());
@@ -303,7 +301,7 @@ py::tuple BAHelpers::BundleLocal(
 }
 
 // -----------------------------------------------------------------------------
-// GCP triangulation helper
+// Triangulate GCP
 // -----------------------------------------------------------------------------
 bool BAHelpers::TriangulateGCP(
     const sfmmap::GroundControlPoint& point,
@@ -344,7 +342,7 @@ bool BAHelpers::TriangulateGCP(
 }
 
 // -----------------------------------------------------------------------------
-// Add GCP to BA
+// Add GCP to Bundle
 // -----------------------------------------------------------------------------
 size_t BAHelpers::AddGCPToBundle(
     bundle::BundleAdjuster& ba,
@@ -408,9 +406,8 @@ size_t BAHelpers::AddGCPToBundle(
 }
 
 // -----------------------------------------------------------------------------
-// STUBS to satisfy all declarations in ba_helpers.h (link-safe)
+// Stub definitions for remaining declarations
 // -----------------------------------------------------------------------------
-
 py::dict BAHelpers::Bundle(
     sfmmap::Map& map,
     const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
