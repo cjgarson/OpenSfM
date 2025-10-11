@@ -1,3 +1,4 @@
+#include <geometry/pose.h>
 #include <map/landmark.h>
 #include <map/rig.h>
 #include <map/shot.h>
