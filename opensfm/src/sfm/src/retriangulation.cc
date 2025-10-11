@@ -6,6 +6,8 @@
 #include <limits>
 #include <unordered_set>
 
+using namespace sfmmap;
+
 namespace sfm {
 namespace retriangulation {
 
