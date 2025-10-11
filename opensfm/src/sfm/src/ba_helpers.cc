@@ -42,6 +42,19 @@ BAHelpers::ShotNeighborhoodIds(sfmmap::Map& map,
   return std::make_pair(interior, boundary);
 }
 
+py::dict BAHelpers::BundleShotPoses(
+    sfmmap::Map& map,
+    const std::unordered_set<sfmmap::ShotId>& shot_ids,
+    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
+    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+    const py::dict& config) {
+
+  py::dict report;
+  report["status"] = "BundleShotPoses stub";
+  report["shots_count"] = static_cast<int>(shot_ids.size());
+  return report;
+}
+
 // Keep the rest of implementation identical but with sfmmap:: types.
 // Nothing else functionally changes.
 }  // namespace sfm
