@@ -4,6 +4,7 @@
 #include <geometry/camera.h>
 #include <geometry/pose.h>
 #include <geometry/similarity.h>
+
 #include <map/map_types.h>
 #include <map/defines.h>
 #include <map/landmark.h>
@@ -20,7 +21,7 @@
 
 namespace map {
 
-// Forward declare views (definitions in dataviews.h/.cc)
+// Forward declare views (implemented in dataviews.h/.cc).
 class CameraView;
 class ShotView;
 class PanoShotView;
@@ -33,23 +34,23 @@ class Map {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  // --- Aliases defined in map_types.h (already included) ---
-  using CameraMap     = map::CameraMap;
-  using BiasMap       = map::BiasMap;
-  using ShotMap       = map::ShotMap;
-  using LandmarkMap   = map::LandmarkMap;
-  using RigCameraMap  = map::RigCameraMap;
-  using RigInstanceMap= map::RigInstanceMap;
+  // Aliases from map_types.h
+  using CameraMap      = map::CameraMap;
+  using BiasMap        = map::BiasMap;
+  using ShotMap        = map::ShotMap;
+  using LandmarkMap    = map::LandmarkMap;
+  using RigCameraMap   = map::RigCameraMap;
+  using RigInstanceMap = map::RigInstanceMap;
 
   // Deep-Copy
   static std::unique_ptr<Map> DeepCopy(const Map& map,
                                        bool copy_observations = false);
 
   // Camera Methods
-  geometry::Camera& GetCamera(const CameraId& cam_id);
-  const geometry::Camera& GetCamera(const CameraId& cam_id) const;
-  geometry::Camera& CreateCamera(const geometry::Camera& cam);
-  CameraView GetCameraView();  // implemented in map.cc
+  ::geometry::Camera& GetCamera(const CameraId& cam_id);
+  const ::geometry::Camera& GetCamera(const CameraId& cam_id) const;
+  ::geometry::Camera& CreateCamera(const ::geometry::Camera& cam);
+  CameraView GetCameraView();  // defined in map.cc
   bool HasCamera(const CameraId& cam_id) const { return cameras_.count(cam_id) > 0; }
   const CameraMap& GetCameras() const { return cameras_; }
   CameraMap& GetCameras() { return cameras_; }
@@ -58,7 +59,7 @@ class Map {
   Shot& CreateShot(const ShotId& shot_id, const CameraId& camera_id,
                    const RigCameraId& rig_camera_id,
                    const RigInstanceId& instance_id,
-                   const geometry::Pose& pose);
+                   const ::geometry::Pose& pose);
   Shot& CreateShot(const ShotId& shot_id, const CameraId& camera_id,
                    const RigCameraId& rig_camera_id,
                    const RigInstanceId& instance_id);
@@ -71,13 +72,13 @@ class Map {
 
   Shot& UpdateShot(const Shot& other_shot);
   void RemoveShot(const ShotId& shot_id);
-  ShotView GetShotView();  // implemented in map.cc
+  ShotView GetShotView();  // defined in map.cc
 
   // PanoShots
   Shot& CreatePanoShot(const ShotId& shot_id, const CameraId& camera_id,
                        const RigCameraId& rig_camera_id,
                        const RigInstanceId& instance_id,
-                       const geometry::Pose& pose);
+                       const ::geometry::Pose& pose);
 
   Shot& GetPanoShot(const ShotId& shot_id);
   const Shot& GetPanoShot(const ShotId& shot_id) const;
@@ -89,7 +90,7 @@ class Map {
 
   void RemovePanoShot(const ShotId& shot_id);
   Shot& UpdatePanoShot(const Shot& other_shot);
-  PanoShotView GetPanoShotView();  // implemented in map.cc
+  PanoShotView GetPanoShotView();  // defined in map.cc
 
   // Rigs
   RigCamera& CreateRigCamera(const map::RigCamera& rig_camera);
@@ -121,7 +122,7 @@ class Map {
   bool HasLandmark(const LandmarkId& lm_id) const {
     return landmarks_.count(lm_id) > 0;
   }
-  LandmarkView GetLandmarkView();  // implemented in map.cc
+  LandmarkView GetLandmarkView();  // defined in map.cc
 
   // Update
   void RemoveLandmark(const Landmark* const lm);
@@ -144,9 +145,9 @@ class Map {
   size_t NumberOfBiases() const { return bias_.size(); }
 
   // Bias
-  BiasView GetBiasView();  // implemented in map.cc
-  geometry::Similarity& GetBias(const CameraId& camera_id);
-  void SetBias(const CameraId& camera_id, const geometry::Similarity& transform);
+  BiasView GetBiasView();  // defined in map.cc
+  ::geometry::Similarity& GetBias(const CameraId& camera_id);
+  void SetBias(const CameraId& camera_id, const ::geometry::Similarity& transform);
   bool HasBias(const CameraId& cam_id) const { return bias_.count(cam_id) > 0; }
   const BiasMap& GetBiases() const { return bias_; }
   BiasMap& GetBiases() { return bias_; }
@@ -174,13 +175,13 @@ class Map {
  private:
   void UpdateShotWithRig(const Shot& other_shot, bool is_panoshot = false);
 
-  CameraMap     cameras_;
-  BiasMap       bias_;
-  ShotMap       shots_;
-  ShotMap       pano_shots_;
-  LandmarkMap   landmarks_;
-  RigInstanceMap rig_instances_;
-  RigCameraMap   rig_cameras_;
+  CameraMap       cameras_;
+  BiasMap         bias_;
+  ShotMap         shots_;
+  ShotMap         pano_shots_;
+  LandmarkMap     landmarks_;
+  RigInstanceMap  rig_instances_;
+  RigCameraMap    rig_cameras_;
 
   geo::TopocentricConverter topo_conv_;
 };
