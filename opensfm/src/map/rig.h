@@ -4,6 +4,7 @@
 #include <geometry/camera.h>
 #include <geometry/pose.h>
 #include <map/defines.h>
+#include <map/map.h>
 
 #include <Eigen/Core>
 #include <Eigen/StdVector>
