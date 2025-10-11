@@ -13,19 +13,19 @@
 #include "map/defines.h"
 
 namespace sfm {
-std::pair<std::unordered_set<map::ShotId>, std::unordered_set<map::ShotId>>
-BAHelpers::ShotNeighborhoodIds(map::Map& map,
-                               const map::ShotId& central_shot_id,
+std::pair<std::unordered_set<map::Map::ShotId>, std::unordered_set<map::Map::ShotId>>
+BAHelpers::ShotNeighborhoodIds(map::Map::Map& map,
+                               const map::Map::ShotId& central_shot_id,
                                size_t radius, size_t min_common_points,
                                size_t max_interior_size) {
   auto res = ShotNeighborhood(map, central_shot_id, radius, min_common_points,
                               max_interior_size);
-  std::unordered_set<map::ShotId> interior;
-  for (map::Shot* shot : res.first) {
+  std::unordered_set<map::Map::ShotId> interior;
+  for (map::Map::Shot* shot : res.first) {
     interior.insert(shot->GetId());
   }
-  std::unordered_set<map::ShotId> boundary;
-  for (map::Shot* shot : res.second) {
+  std::unordered_set<map::Map::ShotId> boundary;
+  for (map::Map::Shot* shot : res.second) {
     boundary.insert(shot->GetId());
   }
   return std::make_pair(interior, boundary);
@@ -41,12 +41,12 @@ Returns:
 Central shot is at distance 0.  Shots at distance n + 1 share at least
 min_common_points points with shots at distance n.
 */
-std::pair<std::unordered_set<map::Shot*>, std::unordered_set<map::Shot*>>
-BAHelpers::ShotNeighborhood(map::Map& map, const map::ShotId& central_shot_id,
+std::pair<std::unordered_set<map::Map::Shot*>, std::unordered_set<map::Map::Shot*>>
+BAHelpers::ShotNeighborhood(map::Map::Map& map, const map::Map::ShotId& central_shot_id,
                             size_t radius, size_t min_common_points,
                             size_t max_interior_size) {
   constexpr size_t MaxBoundarySize{1000000};
-  std::unordered_set<map::Shot*> interior;
+  std::unordered_set<map::Map::Shot*> interior;
   auto& central_shot = map.GetShot(central_shot_id);
   const auto instance_shot =
       map.GetRigInstance(central_shot.GetRigInstanceId()).GetShotIDs();
@@ -66,17 +66,17 @@ BAHelpers::ShotNeighborhood(map::Map& map, const map::ShotId& central_shot_id,
   return std::make_pair(interior, boundary);
 }
 
-std::unordered_set<map::Shot*> BAHelpers::DirectShotNeighbors(
-    map::Map& map, const std::unordered_set<map::Shot*>& shot_ids,
+std::unordered_set<map::Map::Shot*> BAHelpers::DirectShotNeighbors(
+    map::Map::Map& map, const std::unordered_set<map::Map::Shot*>& shot_ids,
     const size_t min_common_points, const size_t max_neighbors) {
-  std::unordered_set<map::Landmark*> points;
+  std::unordered_set<map::Map::Landmark*> points;
   for (auto* shot : shot_ids) {
     for (const auto& lm_obs : shot->GetLandmarkObservations()) {
       points.insert(lm_obs.first);
     }
   }
 
-  std::unordered_map<map::Shot*, size_t> common_points;
+  std::unordered_map<map::Map::Shot*, size_t> common_points;
   for (auto* pt : points) {
     for (const auto& neighbor_p : pt->GetObservations()) {
       auto* shot = neighbor_p.first;
@@ -86,16 +86,16 @@ std::unordered_set<map::Shot*> BAHelpers::DirectShotNeighbors(
     }
   }
 
-  std::vector<std::pair<map::Shot*, size_t>> pairs(common_points.begin(),
+  std::vector<std::pair<map::Map::Shot*, size_t>> pairs(common_points.begin(),
                                                    common_points.end());
   std::sort(pairs.begin(), pairs.end(),
-            [](const std::pair<map::Shot*, size_t>& val1,
-               const std::pair<map::Shot*, size_t>& val2) {
+            [](const std::pair<map::Map::Shot*, size_t>& val1,
+               const std::pair<map::Map::Shot*, size_t>& val2) {
               return val1.second > val2.second;
             });
 
   const size_t max_n = std::min(max_neighbors, pairs.size());
-  std::unordered_set<map::Shot*> neighbors;
+  std::unordered_set<map::Map::Shot*> neighbors;
   size_t idx = 0;
   for (auto& p : pairs) {
     if (p.second >= min_common_points && idx < max_n) {
@@ -113,12 +113,12 @@ std::unordered_set<map::Shot*> BAHelpers::DirectShotNeighbors(
 }
 
 py::tuple BAHelpers::BundleLocal(
-    map::Map& map,
-    const std::unordered_map<map::CameraId, geometry::Camera>& camera_priors,
-    const std::unordered_map<map::RigCameraId, map::RigCamera>&
+    map::Map::Map& map,
+    const std::unordered_map<map::Map::CameraId, geometry::Camera>& camera_priors,
+    const std::unordered_map<map::Map::RigCameraId, map::Map::RigCamera>&
         rig_camera_priors,
-    const AlignedVector<map::GroundControlPoint>& gcp,
-    const map::ShotId& central_shot_id, const py::dict& config) {
+    const AlignedVector<map::Map::GroundControlPoint>& gcp,
+    const map::Map::ShotId& central_shot_id, const py::dict& config) {
   py::dict report;
   const auto start = std::chrono::high_resolution_clock::now();
   auto neighborhood = ShotNeighborhood(
@@ -140,18 +140,18 @@ py::tuple BAHelpers::BundleLocal(
     ba.AddCamera(cam.id, cam, cam_prior, fix_cameras);
   }
   // combine the sets
-  std::unordered_set<map::Shot*> int_and_bound(interior.cbegin(),
+  std::unordered_set<map::Map::Shot*> int_and_bound(interior.cbegin(),
                                                interior.cend());
   int_and_bound.insert(boundary.cbegin(), boundary.cend());
-  std::unordered_set<map::Landmark*> points;
+  std::unordered_set<map::Map::Landmark*> points;
   py::list pt_ids;
 
   constexpr bool point_constant{false};
   constexpr bool rig_camera_constant{true};
 
   // gather required rig data to setup
-  std::unordered_set<map::RigCameraId> rig_cameras_ids;
-  std::unordered_set<map::RigInstanceId> rig_instances_ids;
+  std::unordered_set<map::Map::RigCameraId> rig_cameras_ids;
+  std::unordered_set<map::Map::RigInstanceId> rig_instances_ids;
   for (auto* shot : int_and_bound) {
     rig_cameras_ids.insert(shot->GetRigCameraId());
     rig_instances_ids.insert(shot->GetRigInstanceId());
@@ -306,8 +306,8 @@ py::tuple BAHelpers::BundleLocal(
 }
 
 bool BAHelpers::TriangulateGCP(
-    const map::GroundControlPoint& point,
-    const std::unordered_map<map::ShotId, map::Shot>& shots,
+    const map::Map::GroundControlPoint& point,
+    const std::unordered_map<map::Map::ShotId, map::Map::Shot>& shots,
     Vec3d& coordinates) {
   constexpr auto reproj_threshold{1.0};
   constexpr auto min_ray_angle = 0.1 * M_PI / 180.0;
@@ -342,8 +342,8 @@ bool BAHelpers::TriangulateGCP(
 
 // Add Ground Control Points constraints to the bundle problem
 size_t BAHelpers::AddGCPToBundle(
-    bundle::BundleAdjuster& ba, const map::Map& map,
-    const AlignedVector<map::GroundControlPoint>& gcp, const py::dict& config) {
+    bundle::BundleAdjuster& ba, const map::Map::Map& map,
+    const AlignedVector<map::Map::GroundControlPoint>& gcp, const py::dict& config) {
   const auto& reference = map.GetTopocentricConverter();
   const auto& shots = map.GetShots();
 
@@ -401,9 +401,9 @@ size_t BAHelpers::AddGCPToBundle(
 }
 
 py::dict BAHelpers::BundleShotPoses(
-    map::Map& map, const std::unordered_set<map::ShotId>& shot_ids,
-    const std::unordered_map<map::CameraId, geometry::Camera>& camera_priors,
-    const std::unordered_map<map::RigCameraId, map::RigCamera>&
+    map::Map::Map& map, const std::unordered_set<map::Map::ShotId>& shot_ids,
+    const std::unordered_map<map::Map::CameraId, geometry::Camera>& camera_priors,
+    const std::unordered_map<map::Map::RigCameraId, map::Map::RigCamera>&
         rig_camera_priors,
     const py::dict& config) {
   py::dict report;
@@ -418,12 +418,12 @@ py::dict BAHelpers::BundleShotPoses(
   const auto start = std::chrono::high_resolution_clock::now();
 
   // gather required rig data to setup
-  std::unordered_set<map::RigInstanceId> rig_instances_ids;
+  std::unordered_set<map::Map::RigInstanceId> rig_instances_ids;
   for (const auto& shot_id : shot_ids) {
     const auto& shot = map.GetShot(shot_id);
     rig_instances_ids.insert(shot.GetRigInstanceId());
   }
-  std::unordered_set<map::RigCameraId> rig_cameras_ids;
+  std::unordered_set<map::Map::RigCameraId> rig_cameras_ids;
   for (const auto& rig_instance_id : rig_instances_ids) {
     auto& instance = map.GetRigInstance(rig_instance_id);
     for (const auto& shot_n_rig_camera : instance.GetRigCameras()) {
@@ -438,7 +438,7 @@ py::dict BAHelpers::BundleShotPoses(
                     rig_camera_priors.at(rig_camera_id).pose, fix_rig_camera);
   }
 
-  std::unordered_set<map::CameraId> added_cameras;
+  std::unordered_set<map::Map::CameraId> added_cameras;
   for (const auto& shot_id : shot_ids) {
     const auto& shot = map.GetShot(shot_id);
     const auto& cam = *shot.GetCamera();
@@ -450,7 +450,7 @@ py::dict BAHelpers::BundleShotPoses(
     added_cameras.insert(cam.id);
   }
 
-  std::unordered_set<map::Landmark*> landmarks;
+  std::unordered_set<map::Map::Landmark*> landmarks;
   for (const auto& shot_id : shot_ids) {
     const auto& shot = map.GetShot(shot_id);
     for (const auto& lm_obs : shot.GetLandmarkObservations()) {
@@ -576,11 +576,11 @@ py::dict BAHelpers::BundleShotPoses(
 }
 
 py::dict BAHelpers::Bundle(
-    map::Map& map,
-    const std::unordered_map<map::CameraId, geometry::Camera>& camera_priors,
-    const std::unordered_map<map::RigCameraId, map::RigCamera>&
+    map::Map::Map& map,
+    const std::unordered_map<map::Map::CameraId, geometry::Camera>& camera_priors,
+    const std::unordered_map<map::Map::RigCameraId, map::Map::RigCamera>&
         rig_camera_priors,
-    const AlignedVector<map::GroundControlPoint>& gcp, const py::dict& config) {
+    const AlignedVector<map::Map::GroundControlPoint>& gcp, const py::dict& config) {
   py::dict report;
 
   auto ba = bundle::BundleAdjuster();
@@ -750,7 +750,7 @@ py::dict BAHelpers::Bundle(
 }
 
 void BAHelpers::BundleToMap(const bundle::BundleAdjuster& bundle_adjuster,
-                            map::Map& output_map, bool update_cameras) {
+                            map::Map::Map& output_map, bool update_cameras) {
   // update cameras
   if (update_cameras) {
     for (auto& cam : output_map.GetCameras()) {
@@ -806,8 +806,8 @@ void BAHelpers::BundleToMap(const bundle::BundleAdjuster& bundle_adjuster,
 }
 
 void BAHelpers::AlignmentConstraints(
-    const map::Map& map, const py::dict& config,
-    const AlignedVector<map::GroundControlPoint>& gcp, MatX3d& Xp, MatX3d& X) {
+    const map::Map::Map& map, const py::dict& config,
+    const AlignedVector<map::Map::GroundControlPoint>& gcp, MatX3d& Xp, MatX3d& X) {
   size_t reserve_size = 0;
   const auto& shots = map.GetShots();
   if (!gcp.empty() && config["bundle_use_gcp"].cast<bool>()) {
@@ -851,8 +851,8 @@ void BAHelpers::AlignmentConstraints(
 }
 
 std::string BAHelpers::DetectAlignmentConstraints(
-    const map::Map& map, const py::dict& config,
-    const AlignedVector<map::GroundControlPoint>& gcp) {
+    const map::Map::Map& map, const py::dict& config,
+    const AlignedVector<map::Map::GroundControlPoint>& gcp) {
   MatX3d X, Xp;
   AlignmentConstraints(map, config, gcp, Xp, X);
   if (X.rows() < 3) {
