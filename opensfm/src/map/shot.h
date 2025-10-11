@@ -37,7 +37,7 @@ struct ShotMeasurements {
   foundation::OptionalValue<Vec3d> opk_angles_;
   foundation::OptionalValue<int> orientation_;
   foundation::OptionalValue<std::string> sequence_key_;
-  void Set(const ShotMeasurements& other) { *this = other; }
+  void Set(const ShotMeasurements& other);
 
   std::map<std::string, std::string> attributes_;
   const auto& GetAttributes() const { return attributes_; }
