@@ -363,6 +363,50 @@ bool BAHelpers::TriangulateGCP(
   return false;
 }
 
+py::dict BAHelpers::Bundle(
+    sfmmap::Map& map,
+    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
+    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+    const AlignedVector<sfmmap::GroundControlPoint>& gcp,
+    const py::dict& config) {
+  py::dict report;
+  report["status"] = "Bundle not implemented";
+  report["shots"] = static_cast<int>(map.NumberOfShots());
+  return report;
+}
+
+void BAHelpers::BundleToMap(const bundle::BundleAdjuster& bundle_adjuster,
+                            sfmmap::Map& output_map,
+                            bool update_cameras) {
+  // No-op stub
+  (void)bundle_adjuster;
+  (void)output_map;
+  (void)update_cameras;
+}
+
+std::string BAHelpers::DetectAlignmentConstraints(
+    const sfmmap::Map& map,
+    const py::dict& config,
+    const AlignedVector<sfmmap::GroundControlPoint>& gcp) {
+  (void)map;
+  (void)config;
+  (void)gcp;
+  return "DetectAlignmentConstraints not implemented";
+}
+
+void BAHelpers::AlignmentConstraints(
+    const sfmmap::Map& map,
+    const py::dict& config,
+    const AlignedVector<sfmmap::GroundControlPoint>& gcp,
+    MatX3d& Xp,
+    MatX3d& X) {
+  (void)map;
+  (void)config;
+  (void)gcp;
+  Xp.resize(0, 3);
+  X.resize(0, 3);
+}
+
 // -----------------------------------------------------------------------------
 // Add GCP to BA
 // -----------------------------------------------------------------------------
