@@ -6,16 +6,15 @@
 #include <map/map.h>
 #include <sfm/ba_helpers.h>
 
-#include <pybind11/pybind11.h>
-
 #include <chrono>
 #include <cmath>
 #include <stdexcept>
+#include <algorithm>
 
 #include "geo/geo.h"
 #include "map/defines.h"
 
-namespace py = pybind11;
+using namespace sfmmap;
 
 namespace sfm {
 
@@ -29,17 +28,14 @@ BAHelpers::ShotNeighborhoodIds(sfmmap::Map& map,
                                size_t min_common_points,
                                size_t max_interior_size) {
   auto res = ShotNeighborhood(map, central_shot_id, radius, min_common_points, max_interior_size);
-
   std::unordered_set<sfmmap::ShotId> interior;
   for (sfmmap::Shot* shot : res.first) {
     interior.insert(shot->GetId());
   }
-
   std::unordered_set<sfmmap::ShotId> boundary;
   for (sfmmap::Shot* shot : res.second) {
     boundary.insert(shot->GetId());
   }
-
   return std::make_pair(std::move(interior), std::move(boundary));
 }
 
@@ -53,28 +49,23 @@ BAHelpers::ShotNeighborhood(sfmmap::Map& map,
                             size_t min_common_points,
                             size_t max_interior_size) {
   constexpr size_t kMaxBoundarySize{1000000};
-
   std::unordered_set<sfmmap::Shot*> interior;
 
   auto& central_shot = map.GetShot(central_shot_id);
-  const auto instance_shots =
-      map.GetRigInstance(central_shot.GetRigInstanceId()).GetShotIDs();
-
+  const auto instance_shots = map.GetRigInstance(central_shot.GetRigInstanceId()).GetShotIDs();
   for (const auto& s : instance_shots) {
     interior.insert(&map.GetShot(s));
   }
   interior.insert(&central_shot);
 
-  for (size_t distance = 1;
-       distance < radius && interior.size() < max_interior_size; ++distance) {
+  for (size_t d = 1; d < radius && interior.size() < max_interior_size; ++d) {
     const auto remaining = max_interior_size - interior.size();
-    const auto neighbors =
-        DirectShotNeighbors(map, interior, min_common_points, remaining);
+    const auto neighbors = DirectShotNeighbors(map, interior, min_common_points, remaining);
     interior.insert(neighbors.begin(), neighbors.end());
   }
 
   const auto boundary = DirectShotNeighbors(map, interior, 1, kMaxBoundarySize);
-  return std::make_pair(std::move(interior), std::move(const_cast<std::unordered_set<sfmmap::Shot*>&>(boundary)));
+  return std::make_pair(std::move(interior), std::move(boundary));
 }
 
 // -----------------------------------------------------------------------------
@@ -83,8 +74,8 @@ BAHelpers::ShotNeighborhood(sfmmap::Map& map,
 std::unordered_set<sfmmap::Shot*>
 BAHelpers::DirectShotNeighbors(sfmmap::Map& map,
                                const std::unordered_set<sfmmap::Shot*>& shot_ids,
-                               const size_t min_common_points,
-                               const size_t max_neighbors) {
+                               size_t min_common_points,
+                               size_t max_neighbors) {
   std::unordered_set<sfmmap::Landmark*> points;
   for (auto* shot : shot_ids) {
     for (const auto& lm_obs : shot->GetLandmarkObservations()) {
@@ -109,14 +100,12 @@ BAHelpers::DirectShotNeighbors(sfmmap::Map& map,
               return a.second > b.second;
             });
 
-  const size_t max_n = std::min<size_t>(max_neighbors, pairs.size());
+  const size_t max_n = std::min(max_neighbors, pairs.size());
   std::unordered_set<sfmmap::Shot*> neighbors;
-
   size_t idx = 0;
   for (auto& p : pairs) {
     if (p.second >= min_common_points && idx < max_n) {
-      const auto instance_shots =
-          map.GetRigInstance(p.first->GetRigInstanceId()).GetShotIDs();
+      const auto instance_shots = map.GetRigInstance(p.first->GetRigInstanceId()).GetShotIDs();
       for (const auto& s : instance_shots) {
         neighbors.insert(&map.GetShot(s));
       }
@@ -129,7 +118,7 @@ BAHelpers::DirectShotNeighbors(sfmmap::Map& map,
 }
 
 // -----------------------------------------------------------------------------
-// Local bundle
+// Local bundle (kept from your previous working version)
 // -----------------------------------------------------------------------------
 py::tuple BAHelpers::BundleLocal(
     sfmmap::Map& map,
@@ -143,8 +132,7 @@ py::tuple BAHelpers::BundleLocal(
   const auto start = std::chrono::high_resolution_clock::now();
 
   auto neighborhood = ShotNeighborhood(
-      map,
-      central_shot_id,
+      map, central_shot_id,
       config["local_bundle_radius"].cast<size_t>(),
       config["local_bundle_min_common_points"].cast<size_t>(),
       config["local_bundle_max_shots"].cast<size_t>());
@@ -152,10 +140,10 @@ py::tuple BAHelpers::BundleLocal(
   auto& interior = neighborhood.first;
   auto& boundary = neighborhood.second;
 
-  bundle::BundleAdjuster ba;
+  auto ba = bundle::BundleAdjuster();
   ba.SetUseAnalyticDerivatives(config["bundle_analytic_derivatives"].cast<bool>());
 
-  // Cameras
+  // Cameras as fixed
   for (const auto& cam_pair : map.GetCameras()) {
     const auto& cam = cam_pair.second;
     const auto& cam_prior = camera_priors.at(cam.id);
@@ -163,7 +151,6 @@ py::tuple BAHelpers::BundleLocal(
     ba.AddCamera(cam.id, cam, cam_prior, kFixCameras);
   }
 
-  // Sets
   std::unordered_set<sfmmap::Shot*> int_and_bound(interior.cbegin(), interior.cend());
   int_and_bound.insert(boundary.cbegin(), boundary.cend());
 
@@ -173,7 +160,6 @@ py::tuple BAHelpers::BundleLocal(
   constexpr bool kPointConstant{false};
   constexpr bool kRigCameraConstant{true};
 
-  // Rigs present in neighborhood
   std::unordered_set<sfmmap::RigCameraId> rig_cameras_ids;
   std::unordered_set<sfmmap::RigInstanceId> rig_instances_ids;
   for (auto* shot : int_and_bound) {
@@ -181,16 +167,14 @@ py::tuple BAHelpers::BundleLocal(
     rig_instances_ids.insert(shot->GetRigInstanceId());
   }
 
-  // Rig cameras
+  // Rig cameras (fixed)
   for (const auto& rig_camera_id : rig_cameras_ids) {
     const auto& rig_camera = map.GetRigCamera(rig_camera_id);
-    ba.AddRigCamera(rig_camera_id,
-                    rig_camera.pose,
+    ba.AddRigCamera(rig_camera_id, rig_camera.pose,
                     rig_camera_priors.at(rig_camera_id).pose,
                     kRigCameraConstant);
   }
 
-  // Rig instances and GPS priors
   const std::string gps_scale_group = "dummy";
   for (const auto& rig_instance_id : rig_instances_ids) {
     auto& instance = map.GetRigInstance(rig_instance_id);
@@ -231,7 +215,7 @@ py::tuple BAHelpers::BundleLocal(
     }
   }
 
-  // Points / projections (interior)
+  // Observations (interior first, then add boundary tracks already present)
   for (auto* shot : interior) {
     for (const auto& lm_obs : shot->GetLandmarkObservations()) {
       auto* lm = lm_obs.first;
@@ -241,27 +225,25 @@ py::tuple BAHelpers::BundleLocal(
         ba.AddPoint(lm->id_, lm->GetGlobalPos(), kPointConstant);
       }
       const auto& obs = lm_obs.second;
-      ba.AddPointProjectionObservation(shot->id_, lm_obs.first->id_, obs.point, obs.scale);
+      ba.AddPointProjectionObservation(shot->id_, lm_obs.first->id_,
+                                       obs.point, obs.scale);
     }
   }
-
-  // Boundary projections to interior points
   for (auto* shot : boundary) {
     for (const auto& lm_obs : shot->GetLandmarkObservations()) {
       auto* lm = lm_obs.first;
       if (points.count(lm) > 0) {
         const auto& obs = lm_obs.second;
-        ba.AddPointProjectionObservation(shot->id_, lm_obs.first->id_, obs.point, obs.scale);
+        ba.AddPointProjectionObservation(shot->id_, lm_obs.first->id_,
+                                         obs.point, obs.scale);
       }
     }
   }
 
-  // GCP
   if (config["bundle_use_gcp"].cast<bool>() && !gcp.empty()) {
     AddGCPToBundle(ba, map, gcp, config);
   }
 
-  // BA options
   ba.SetPointProjectionLossFunction(
       config["loss_function"].cast<std::string>(),
       config["loss_function_threshold"].cast<double>());
@@ -282,7 +264,6 @@ py::tuple BAHelpers::BundleLocal(
   ba.SetLinearSolverType("DENSE_SCHUR");
 
   const auto timer_setup = std::chrono::high_resolution_clock::now();
-
   {
     py::gil_scoped_release release;
     ba.Run();
@@ -290,14 +271,14 @@ py::tuple BAHelpers::BundleLocal(
 
   const auto timer_run = std::chrono::high_resolution_clock::now();
 
-  // Write back rig instances
+  // Copy rig instance poses back
   for (const auto& rig_instance_id : rig_instances_ids) {
     auto& instance = map.GetRigInstance(rig_instance_id);
     auto i = ba.GetRigInstance(rig_instance_id);
     instance.SetPose(i.GetValue());
   }
 
-  // Write back points
+  // Copy points back
   for (auto* point : points) {
     const auto& pt = ba.GetPoint(point->id_);
     point->SetGlobalPos(pt.GetValue());
@@ -315,17 +296,18 @@ py::tuple BAHelpers::BundleLocal(
       std::chrono::duration_cast<std::chrono::microseconds>(timer_teardown - timer_run).count() / 1e6;
   report["num_interior_images"] = interior.size();
   report["num_boundary_images"] = boundary.size();
-  report["num_other_images"] = map.NumberOfShots() - interior.size() - boundary.size();
+  report["num_other_images"] =
+      map.NumberOfShots() - interior.size() - boundary.size();
 
-  return py::make_tuple(pt_ids, report);
+  return py::make_tuple(std::move(pt_ids), std::move(report));
 }
 
 // -----------------------------------------------------------------------------
-// GCP Triangulation helper
+// GCP triangulation helper
 // -----------------------------------------------------------------------------
 bool BAHelpers::TriangulateGCP(
     const sfmmap::GroundControlPoint& point,
-    const sfmmap::Map::ShotMap& shots,
+    const std::unordered_map<sfmmap::ShotId, sfmmap::Shot>& shots,
     Vec3d& coordinates) {
   constexpr auto reproj_threshold{1.0};
   constexpr auto min_ray_angle = 0.1 * M_PI / 180.0;
@@ -334,22 +316,20 @@ bool BAHelpers::TriangulateGCP(
   MatX3d os, bs;
   size_t added = 0;
   coordinates = Vec3d::Zero();
-
   bs.conservativeResize(point.observations_.size(), Eigen::NoChange);
   os.conservativeResize(point.observations_.size(), Eigen::NoChange);
 
   for (const auto& obs : point.observations_) {
     const auto shot_it = shots.find(obs.shot_id_);
     if (shot_it != shots.end()) {
-      const auto& shot = shot_it->second;
+      const auto& shot = (shot_it->second);
       const Vec3d bearing = shot.GetCamera()->Bearing(obs.projection_);
-      const auto* shot_pose = shot.GetPose();
+      const auto& shot_pose = shot.GetPose();
       bs.row(added) = shot_pose->RotationCameraToWorld() * bearing;
       os.row(added) = shot_pose->GetOrigin();
       ++added;
     }
   }
-
   bs.conservativeResize(added, Eigen::NoChange);
   os.conservativeResize(added, Eigen::NoChange);
 
@@ -363,50 +343,6 @@ bool BAHelpers::TriangulateGCP(
   return false;
 }
 
-py::dict BAHelpers::Bundle(
-    sfmmap::Map& map,
-    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
-    const AlignedVector<sfmmap::GroundControlPoint>& gcp,
-    const py::dict& config) {
-  py::dict report;
-  report["status"] = "Bundle not implemented";
-  report["shots"] = static_cast<int>(map.NumberOfShots());
-  return report;
-}
-
-void BAHelpers::BundleToMap(const bundle::BundleAdjuster& bundle_adjuster,
-                            sfmmap::Map& output_map,
-                            bool update_cameras) {
-  // No-op stub
-  (void)bundle_adjuster;
-  (void)output_map;
-  (void)update_cameras;
-}
-
-std::string BAHelpers::DetectAlignmentConstraints(
-    const sfmmap::Map& map,
-    const py::dict& config,
-    const AlignedVector<sfmmap::GroundControlPoint>& gcp) {
-  (void)map;
-  (void)config;
-  (void)gcp;
-  return "DetectAlignmentConstraints not implemented";
-}
-
-void BAHelpers::AlignmentConstraints(
-    const sfmmap::Map& map,
-    const py::dict& config,
-    const AlignedVector<sfmmap::GroundControlPoint>& gcp,
-    MatX3d& Xp,
-    MatX3d& X) {
-  (void)map;
-  (void)config;
-  (void)gcp;
-  Xp.resize(0, 3);
-  X.resize(0, 3);
-}
-
 // -----------------------------------------------------------------------------
 // Add GCP to BA
 // -----------------------------------------------------------------------------
@@ -415,13 +351,12 @@ size_t BAHelpers::AddGCPToBundle(
     const sfmmap::Map& map,
     const AlignedVector<sfmmap::GroundControlPoint>& gcp,
     const py::dict& config) {
-
   const auto& reference = map.GetTopocentricConverter();
   const auto& shots = map.GetShots();
 
-  const auto dominant_terms = ba.GetRigInstances().size()
-                            + ba.GetProjectionsCount()
-                            + ba.GetRelativeMotionsCount();
+  const auto dominant_terms = ba.GetRigInstances().size() +
+                              ba.GetProjectionsCount() +
+                              ba.GetRelativeMotionsCount();
 
   size_t total_terms = 0;
   for (const auto& point : gcp) {
@@ -434,15 +369,13 @@ size_t BAHelpers::AddGCPToBundle(
     }
   }
 
-  const double global_weight =
-      config["gcp_global_weight"].cast<double>() *
-      dominant_terms / std::max<size_t>(1, total_terms);
+  double global_weight = config["gcp_global_weight"].cast<double>() *
+                         dominant_terms / std::max<size_t>(1, total_terms);
 
   size_t added = 0;
   for (const auto& point : gcp) {
-    const auto point_id = std::string("gcp-") + point.id_;
+    const auto point_id = "gcp-" + point.id_;
     Vec3d coordinates;
-
     if (!TriangulateGCP(point, shots, coordinates)) {
       if (!point.lla_.empty()) {
         coordinates = reference.ToTopocentric(point.GetLlaVec3d());
@@ -450,19 +383,15 @@ size_t BAHelpers::AddGCPToBundle(
         continue;
       }
     }
-
-    constexpr auto kPointConstant{false};
-    ba.AddPoint(point_id, coordinates, kPointConstant);
+    constexpr auto point_constant{false};
+    ba.AddPoint(point_id, coordinates, point_constant);
 
     if (!point.lla_.empty()) {
-      const auto point_std = Vec3d(
-          config["gcp_horizontal_sd"].cast<double>(),
-          config["gcp_horizontal_sd"].cast<double>(),
-          config["gcp_vertical_sd"].cast<double>());
-      ba.AddPointPrior(point_id,
-                       reference.ToTopocentric(point.GetLlaVec3d()),
-                       point_std / global_weight,
-                       point.has_altitude_);
+      const auto point_std = Vec3d(config["gcp_horizontal_sd"].cast<double>(),
+                                   config["gcp_horizontal_sd"].cast<double>(),
+                                   config["gcp_vertical_sd"].cast<double>());
+      ba.AddPointPrior(point_id, reference.ToTopocentric(point.GetLlaVec3d()),
+                       point_std / global_weight, point.has_altitude_);
     }
 
     for (const auto& obs : point.observations_) {
@@ -476,6 +405,60 @@ size_t BAHelpers::AddGCPToBundle(
     }
   }
   return added;
+}
+
+// -----------------------------------------------------------------------------
+// STUBS to satisfy all declarations in ba_helpers.h (link-safe)
+// -----------------------------------------------------------------------------
+
+py::dict BAHelpers::Bundle(
+    sfmmap::Map& map,
+    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
+    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+    const AlignedVector<sfmmap::GroundControlPoint>& gcp,
+    const py::dict& config) {
+  (void)map; (void)camera_priors; (void)rig_camera_priors; (void)gcp; (void)config;
+  py::dict report;
+  report["status"] = "Bundle not implemented";
+  return report;
+}
+
+py::dict BAHelpers::BundleShotPoses(
+    sfmmap::Map& map,
+    const std::unordered_set<sfmmap::ShotId>& shot_ids,
+    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
+    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+    const py::dict& config) {
+  (void)map; (void)shot_ids; (void)camera_priors; (void)rig_camera_priors; (void)config;
+  py::dict report;
+  report["status"] = "BundleShotPoses not implemented";
+  report["num_shots"] = static_cast<int>(shot_ids.size());
+  return report;
+}
+
+void BAHelpers::BundleToMap(const bundle::BundleAdjuster& bundle_adjuster,
+                            sfmmap::Map& output_map,
+                            bool update_cameras) {
+  (void)bundle_adjuster; (void)output_map; (void)update_cameras;
+}
+
+std::string BAHelpers::DetectAlignmentConstraints(
+    const sfmmap::Map& map,
+    const py::dict& config,
+    const AlignedVector<sfmmap::GroundControlPoint>& gcp) {
+  (void)map; (void)config; (void)gcp;
+  return "DetectAlignmentConstraints not implemented";
+}
+
+void BAHelpers::AlignmentConstraints(
+    const sfmmap::Map& map,
+    const py::dict& config,
+    const AlignedVector<sfmmap::GroundControlPoint>& gcp,
+    MatX3d& Xp,
+    MatX3d& X) {
+  (void)map; (void)config; (void)gcp;
+  Xp.resize(0, 3);
+  X.resize(0, 3);
 }
 
 }  // namespace sfm
