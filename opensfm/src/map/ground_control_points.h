@@ -2,7 +2,7 @@
 #include <foundation/optional.h>
 #include <map/defines.h>
 #include <map/map.h>
-namespace map {
+namespace sfmmap {
 struct GroundControlPointObservation {
   /*    A ground control point observation.
 
