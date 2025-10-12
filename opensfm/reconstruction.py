@@ -9,8 +9,8 @@ from abc import abstractmethod, ABC
 from collections import defaultdict
 from itertools import combinations
 from timeit import default_timer as timer
-from typing import Dict, Any, List, Tuple, Set, Optional, Union
-import networkx as nx 
+from typing import Dict, Any, List, Tuple, Set, Optional, Union, Iterable
+import networkx as nx
 from collections import deque
 
 import cv2
@@ -67,7 +67,12 @@ def bundle(
         config,
     )
 
-    logger.debug(report["brief_report"])
+    # Be robust to stubbed or minimal reports
+    brief = report.get("brief_report")
+    if brief is not None:
+        logger.debug(brief)
+    else:
+        logger.debug("bundle finished (stub)")
     return report
 
 
@@ -106,7 +111,11 @@ def bundle_local(
         central_shot_id,
         config,
     )
-    logger.debug(report["brief_report"])
+    brief = report.get("brief_report")
+    if brief is not None:
+        logger.debug(brief)
+    else:
+        logger.debug("local bundle finished (stub)")
     return pt_ids, report
 
 
@@ -1081,12 +1090,12 @@ class TrackTriangulator:
                     continue
 
                 t = (plane_center.dot(plane_normal) - plane_normal.dot(o)) / d
-                
+
                 X[0] = o[0] + b[0] * t
                 X[1] = o[1] + b[1] * t
                 X[2] = o[2] + b[2] * t
                 Xs.append(X)
-            
+
             if len(Xs) < 2:
                 return
 
@@ -1226,14 +1235,56 @@ def retriangulate_planar(
     return report
 
 def get_error_distribution(points: Dict[str, pymap.Landmark]) -> Tuple[float, float]:
-    all_errors = []
+    """Return robust mean and std of 2D reprojection error magnitudes.
+
+    Handles empty inputs and heterogeneous shapes gracefully.
+    """
+    all_errors: List[np.ndarray] = []
     for track in points.values():
-        all_errors += track.reprojection_errors.values()
-    robust_mean = np.median(all_errors, axis=0)
-    robust_std = 1.486 * np.median(
-        np.linalg.norm(np.array(all_errors) - robust_mean, axis=1)
-    )
-    return robust_mean, robust_std
+        # track.reprojection_errors is a dict: shot_id -> [ex, ey]
+        vals = list(track.reprojection_errors.values())
+        if not vals:
+            continue
+        # Each val could be [ex, ey] or np.array([ex, ey])
+        for v in vals:
+            v_arr = np.asarray(v, dtype=float)
+            if v_arr.ndim == 0:
+                # scalar—treat as magnitude directly
+                all_errors.append(np.array([v_arr], dtype=float))
+            elif v_arr.ndim == 1:
+                all_errors.append(v_arr)
+            else:
+                all_errors.append(v_arr.ravel())
+
+    if not all_errors:
+        # No data yet
+        return 0.0, 0.0
+
+    arr = np.asarray(all_errors, dtype=float)
+
+    # Ensure we have a consistent 2D-vector list for magnitudes; if not, fall back to scalar list
+    if arr.ndim == 1:
+        if arr.size % 2 == 0:
+            arr = arr.reshape(-1, 2)
+            mags = np.linalg.norm(arr, axis=1)
+        else:
+            mags = arr.astype(float)
+    else:
+        # If shape is (N, 2) use vector norms; otherwise flatten per-row best-effort
+        if arr.shape[1] == 2:
+            mags = np.linalg.norm(arr, axis=1)
+        else:
+            mags = np.linalg.norm(arr, axis=1) if arr.shape[1] > 1 else arr.ravel()
+
+    if mags.size == 0:
+        return 0.0, 0.0
+
+    # Robust stats (median & MAD-to-std)
+    median = float(np.median(mags))
+    mad = float(np.median(np.abs(mags - median)))
+    robust_std = 1.4826 * mad  # standard MAD scaling to Gaussian std
+
+    return median, robust_std
 
 
 def get_actual_threshold(
@@ -1241,10 +1292,14 @@ def get_actual_threshold(
 ) -> float:
     filter_type = config["bundle_outlier_filtering_type"]
     if filter_type == "FIXED":
-        return config["bundle_outlier_fixed_threshold"]
+        return float(config["bundle_outlier_fixed_threshold"])
     elif filter_type == "AUTO":
         mean, std = get_error_distribution(points)
-        return config["bundle_outlier_auto_ratio"] * np.linalg.norm(mean + std)
+        # Default fallback when stats are not available/reliable
+        default_thr = float(config.get("outlier_threshold", 1.0))
+        if not np.isfinite(mean) or not np.isfinite(std) or (mean == 0.0 and std == 0.0):
+            return default_thr
+        return max(default_thr, float(config["bundle_outlier_auto_ratio"]) * (mean + std))
     else:
         return 1.0
 
@@ -1252,21 +1307,37 @@ def get_actual_threshold(
 def remove_outliers(
     reconstruction: types.Reconstruction,
     config: Dict[str, Any],
-    points: Optional[Dict[str, pymap.Landmark]] = None,
+    points: Optional[Union[Dict[str, pymap.Landmark], Iterable[str]]] = None,
 ) -> int:
     """Remove points with large reprojection error.
 
-    A list of point ids to be processed can be given in ``points``.
+    If ``points`` is:
+      - None: process all points in the reconstruction
+      - dict[id -> Landmark]: process only those landmarks
+      - iterable of ids: process only landmarks whose ids are in the iterable
+        (this matches the return form of bundle_local in some pipelines)
     """
+    # Select which points to scan
     if points is None:
-        points = reconstruction.points
+        selected: Dict[str, pymap.Landmark] = reconstruction.points
+    elif isinstance(points, dict):
+        selected = points  # type: ignore[assignment]
+    else:
+        # Iterable of ids
+        ids = set(points)
+        selected = {pid: reconstruction.points[pid] for pid in ids if pid in reconstruction.points}
+
+    if not selected:
+        logger.info("Removed outliers: 0 (no points to evaluate)")
+        return 0
+
     threshold_sqr = get_actual_threshold(config, reconstruction.points) ** 2
-    outliers = []
-    for point_id in points:
-        for shot_id, error in reconstruction.points[
-            point_id
-        ].reprojection_errors.items():
-            error_sqr = error[0] ** 2 + error[1] ** 2
+    outliers: List[Tuple[str, str]] = []
+    for point_id, lm in selected.items():
+        for shot_id, error in lm.reprojection_errors.items():
+            # error is expected to be length-2
+            ex, ey = float(error[0]), float(error[1]) if len(error) > 1 else (float(error[0]), 0.0)
+            error_sqr = ex * ex + ey * ey
             if error_sqr > threshold_sqr:
                 outliers.append((point_id, shot_id))
 
@@ -1556,6 +1627,7 @@ def grow_reconstruction(
                     image,
                     config,
                 )
+                # Accept list of point IDs here
                 remove_outliers(reconstruction, config, bundled_points)
                 step["local_bundle"] = brep
 
