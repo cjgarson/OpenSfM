@@ -119,10 +119,10 @@ bool BAHelpers::TriangulateGCP(
 // Local bundle — shape the same report as Python expects
 //   Returns (list_of_point_ids, dict_with_brief_report)
 // -----------------------------------------------------------------------------
-py::tuple BAHelpers::BundleLocal(
-    sfmmap::Map& map,
-    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+std::pair<std::vector<std::string>, pybind11::dict>
+BAHelpers::BundleLocal(sfmmap::Map& map,
+    const sfmmap::Map::CameraMap& camera_priors,
+    const sfmmap::Map::RigCameraMap& rig_camera_priors,
     const AlignedVector<sfmmap::GroundControlPoint>& gcp,
     const sfmmap::ShotId& central_shot_id,
     const py::dict& config) {
@@ -146,10 +146,10 @@ py::tuple BAHelpers::BundleLocal(
 // -----------------------------------------------------------------------------
 // Global bundle — no-op adjustment but returns a rich report with `brief_report`
 // -----------------------------------------------------------------------------
-py::dict BAHelpers::Bundle(
+pybind11::dict BAHelpers::Bundle(
     sfmmap::Map& map,
-    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+    const sfmmap::Map::CameraMap& camera_priors,
+    const sfmmap::Map::RigCameraMap& rig_camera_priors,
     const AlignedVector<sfmmap::GroundControlPoint>& gcp,
     const py::dict& /*config*/) {
 
@@ -170,11 +170,11 @@ py::dict BAHelpers::Bundle(
 // -----------------------------------------------------------------------------
 // BundleShotPoses — keep signature stable and return a brief report
 // -----------------------------------------------------------------------------
-py::dict BAHelpers::BundleShotPoses(
+pybind11::dict BAHelpers::BundleShotPoses(
     sfmmap::Map& map,
-    const std::unordered_set<sfmmap::ShotId>& shot_ids,
-    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& /*camera_priors*/,
-    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& /*rig_camera_priors*/,
+    const std::unordered_set<std::string>& shot_ids,
+    const sfmmap::Map::CameraMap& camera_priors,
+    const sfmmap::Map::RigCameraMap& rig_camera_priors,
     const py::dict& /*config*/) {
   py::dict report;
   report["status"]       = "ok";
