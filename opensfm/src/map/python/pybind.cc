@@ -623,11 +623,16 @@ PYBIND11_MODULE(pymap, m) {
            py::return_value_policy::reference_internal)
       .def("create_rig_instance", &sfmmap::Map::CreateRigInstance,
            py::return_value_policy::reference_internal)
+      // one-arg overload used by types.py
       .def("update_rig_instance",
-           (sfmmap::RigInstance& (sfmmap::Map::*)(
-               const sfmmap::RigInstance&,
-               const sfmmap::Map::RigCameraMap&))
-           &sfmmap::Map::UpdateRigInstance,
+           (sfmmap::RigInstance& (sfmmap::Map::*)(const sfmmap::RigInstance&))
+               &sfmmap::Map::UpdateRigInstance,
+           py::return_value_policy::reference_internal)
+      // two-arg overload variant
+      .def("update_rig_instance",
+           (sfmmap::RigInstance& (sfmmap::Map::*)(const sfmmap::RigInstance&,
+                                                  const sfmmap::Map::RigCameraMap&))
+               &sfmmap::Map::UpdateRigInstance,
            py::arg("other_rig_instance"),
            py::arg("rig_cameras"),
            py::return_value_policy::reference_internal)
