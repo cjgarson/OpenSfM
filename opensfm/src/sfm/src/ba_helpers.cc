@@ -119,8 +119,8 @@ BAHelpers::DirectShotNeighbors(sfmmap::Map& /*map*/,
 // -----------------------------------------------------------------------------
 py::tuple BAHelpers::BundleLocal(
     sfmmap::Map& map,
-    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+    const sfmmap::Map::CameraMap&    camera_priors,
+    const sfmmap::Map::RigCameraMap& rig_camera_priors,
     const AlignedVector<sfmmap::GroundControlPoint>& gcp,
     const sfmmap::ShotId& central_shot_id,
     const py::dict& config) {
@@ -201,8 +201,8 @@ bool BAHelpers::TriangulateGCP(
 // -----------------------------------------------------------------------------
 py::dict BAHelpers::Bundle(
     sfmmap::Map& map,
-    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+    const sfmmap::Map::CameraMap&    camera_priors,
+    const sfmmap::Map::RigCameraMap& rig_camera_priors,
     const AlignedVector<sfmmap::GroundControlPoint>& gcp,
     const py::dict& config) {
   (void)map; (void)camera_priors; (void)rig_camera_priors; (void)gcp; (void)config;
@@ -217,8 +217,8 @@ py::dict BAHelpers::Bundle(
 py::dict BAHelpers::BundleShotPoses(
     sfmmap::Map& map,
     const std::unordered_set<sfmmap::ShotId>& shot_ids,
-    const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-    const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+    const sfmmap::Map::CameraMap&    camera_priors,
+    const sfmmap::Map::RigCameraMap& rig_camera_priors,
     const py::dict& config) {
   (void)map; (void)shot_ids; (void)camera_priors; (void)rig_camera_priors; (void)config;
   py::dict report;
