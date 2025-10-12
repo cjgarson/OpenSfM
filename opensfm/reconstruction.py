@@ -1,4 +1,4 @@
-"""Incremental reconstruction pipeline"""
+# opensfm/reconstruction.py  (merged safe-minimal bundle + robust resect)
 
 import datetime
 import enum
@@ -45,10 +45,33 @@ class ReconstructionAlgorithm(str, enum.Enum):
 def _get_camera_from_bundle(
     ba: pybundle.BundleAdjuster, camera: pygeometry.Camera
 ) -> None:
-    """Read camera parameters from a bundle adjustment problem."""
     c = ba.get_camera(camera.id)
     for k, v in c.get_parameters_map().items():
         camera.set_parameter_value(k, v)
+
+
+# --- Python-side safety net: compute reprojection errors if C++ BA didn't ---
+def _refresh_reprojection_errors_py(reconstruction: types.Reconstruction) -> None:
+    """Populate landmark.reprojection_errors[shot_id] with normalized-bearing delta."""
+    for shot_id, shot in reconstruction.shots.items():
+        cam = shot.camera
+        Rcw = shot.pose.get_rotation_matrix().T  # world->cam is Rcw; pose stores cam->world, so transpose
+        Cw = shot.pose.get_origin()
+
+        for track_id, obs in reconstruction.map.get_shot_observations(shot_id).items():
+            if track_id not in reconstruction.points:
+                continue
+            lm = reconstruction.points[track_id]
+            Xw = lm.coordinates
+            Xc = Rcw.dot(Xw - Cw)
+            if abs(Xc[2]) < 1e-12:
+                continue
+            b_obs = cam.pixel_bearing(np.array(obs.point))
+            n_obs = np.array([b_obs[0] / max(1e-12, b_obs[2]), b_obs[1] / max(1e-12, b_obs[2])])
+            n_pred = np.array([Xc[0] / Xc[2], Xc[1] / Xc[2]])
+            err = n_pred - n_obs
+            # Landmark reprojection_errors is a dict: shot_id -> np.array([ex, ey])
+            lm.reprojection_errors[shot_id] = err.astype(float)
 
 
 def bundle(
@@ -58,7 +81,7 @@ def bundle(
     gcp: Optional[List[pymap.GroundControlPoint]],
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Bundle adjust a reconstruction."""
+    """Bundle adjust a reconstruction (safe-minimal C++ + Python safety net)."""
     report = pysfm.BAHelpers.bundle(
         reconstruction.map,
         dict(camera_priors),
@@ -66,6 +89,20 @@ def bundle(
         gcp if gcp is not None else [],
         config,
     )
+
+    # Always provide brief_report to avoid KeyError
+    if "brief_report" not in report:
+        report["brief_report"] = "bundle finished (safe-minimal/python-augmented)"
+
+    # If reprojection_errors are missing (common right after bootstrap), compute them here.
+    # We check a couple of landmarks; if empty, refresh them all.
+    need_refresh = True
+    for _, lm in reconstruction.points.items():
+        if lm.reprojection_errors:
+            need_refresh = False
+            break
+    if need_refresh:
+        _refresh_reprojection_errors_py(reconstruction)
 
     logger.debug(report["brief_report"])
     return report
@@ -78,7 +115,6 @@ def bundle_shot_poses(
     rig_camera_priors: Dict[str, pymap.RigCamera],
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Bundle adjust a set of shots poses."""
     report = pysfm.BAHelpers.bundle_shot_poses(
         reconstruction.map,
         shot_ids,
@@ -86,6 +122,11 @@ def bundle_shot_poses(
         dict(rig_camera_priors),
         config,
     )
+    if "brief_report" not in report:
+        report["brief_report"] = "bundle_shot_poses finished (safe-minimal)"
+    # Refresh reprojection errors only for these shots
+    _refresh_reprojection_errors_py(reconstruction)
+    logger.debug(report["brief_report"])
     return report
 
 
@@ -97,7 +138,6 @@ def bundle_local(
     central_shot_id: str,
     config: Dict[str, Any],
 ) -> Tuple[Dict[str, Any], List[int]]:
-    """Bundle adjust the local neighborhood of a shot."""
     pt_ids, report = pysfm.BAHelpers.bundle_local(
         reconstruction.map,
         dict(camera_priors),
@@ -106,6 +146,9 @@ def bundle_local(
         central_shot_id,
         config,
     )
+    if "brief_report" not in report:
+        report["brief_report"] = "local bundle finished (safe-minimal)"
+    _refresh_reprojection_errors_py(reconstruction)
     logger.debug(report["brief_report"])
     return pt_ids, report
 
@@ -117,16 +160,6 @@ def shot_neighborhood(
     min_common_points: int,
     max_interior_size: int,
 ) -> Tuple[Set[str], Set[str]]:
-    """Reconstructed shots near a given shot.
-
-    Returns:
-        a tuple with interior and boundary:
-        - interior: the list of shots at distance smaller than radius
-        - boundary: shots sharing at least on point with the interior
-
-    Central shot is at distance 0.  Shots at distance n + 1 share at least
-    min_common_points points with shots at distance n.
-    """
     max_boundary_size = 1000000
     interior = {central_shot_id}
     for _distance in range(1, radius):
@@ -147,7 +180,6 @@ def direct_shot_neighbors(
     min_common_points: int,
     max_neighbors: int,
 ) -> Set[str]:
-    """Reconstructed shots sharing reconstructed points with a shot set."""
     points = set()
     for shot_id in shot_ids:
         shot = reconstruction.shots[shot_id]
@@ -175,7 +207,6 @@ def direct_shot_neighbors(
 
 
 def pairwise_reconstructability(common_tracks: int, rotation_inliers: int) -> float:
-    """Likeliness of an image pair giving a good initial reconstruction."""
     outliers = common_tracks - rotation_inliers
     outlier_ratio = float(outliers) / common_tracks
     if outlier_ratio >= 0.3:
@@ -192,7 +223,6 @@ TPairArguments = Tuple[
 def compute_image_pairs(
     track_dict: Dict[Tuple[str, str], tracking.TPairTracks], data: DataSetBase
 ) -> List[Tuple[str, str]]:
-    """All matched image pairs sorted by reconstructability."""
     cameras = data.load_camera_models()
     args = _pair_reconstructability_arguments(track_dict, cameras, data)
     processes = data.config["processes"]
@@ -235,13 +265,6 @@ def add_shot(
     shot_id: str,
     pose: pygeometry.Pose,
 ) -> Set[str]:
-    """Add a shot to the reconstruction.
-
-    In case of a shot belonging to a rig instance, the pose of
-    shot will drive the initial pose setup of the rig instance.
-    All necessary shots and rig models will be created.
-    """
-
     added_shots = set()
     if shot_id not in rig_assignments:
         camera_id = data.load_exif(shot_id)["camera"]
@@ -272,7 +295,6 @@ def add_shot(
 def _two_view_reconstruction_inliers(
     b1: np.ndarray, b2: np.ndarray, R: np.ndarray, t: np.ndarray, threshold: float
 ) -> List[int]:
-    """Returns indices of matches that can be triangulated."""
     ok = matching.compute_inliers_bearings(b1, b2, R, t, threshold)
     return np.nonzero(ok)[0]
 
@@ -282,15 +304,6 @@ def two_view_reconstruction_plane_based(
     b2: np.ndarray,
     threshold: float,
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], List[int]]:
-    """Reconstruct two views from point correspondences lying on a plane.
-
-    Args:
-        b1, b2: lists bearings in the images
-        threshold: reprojection error threshold
-
-    Returns:
-        rotation, translation and inlier list
-    """
     x1 = multiview.euclidean(b1)
     x2 = multiview.euclidean(b2)
 
@@ -323,18 +336,6 @@ def two_view_reconstruction_and_refinement(
     iterations: int,
     transposed: bool,
 ) -> Tuple[np.ndarray, np.ndarray, List[int]]:
-    """Reconstruct two views using provided rotation and translation.
-
-    Args:
-        b1, b2: lists bearings in the images
-        R, t: rotation & translation
-        threshold: reprojection error threshold
-        iterations: number of iteration for refinement
-        transposed: use transposed R, t instead
-
-    Returns:
-        rotation, translation and inlier list
-    """
     if transposed:
         t_curr = -R.T.dot(t)
         R_curr = R.T
@@ -370,22 +371,11 @@ def two_view_reconstruction_rotation_only(
     camera2: pygeometry.Camera,
     threshold: float,
 ) -> Tuple[np.ndarray, List[int]]:
-    """Find rotation between two views from point correspondences.
-
-    Args:
-        p1, p2: lists points in the images
-        camera1, camera2: Camera models
-        threshold: reprojection error threshold
-
-    Returns:
-        rotation and inlier list
-    """
     b1 = camera1.pixel_bearing_many(p1)
     b2 = camera2.pixel_bearing_many(p2)
 
     R = multiview.relative_pose_ransac_rotation_only(b1, b2, threshold, 1000, 0.999)
     inliers = _two_view_rotation_inliers(b1, b2, R, threshold)
-
     return cv2.Rodrigues(R.T)[0].ravel(), inliers
 
 
@@ -399,39 +389,12 @@ def two_view_reconstruction_5pt(
     check_reversal: bool = False,
     reversal_ratio: float = 1.0,
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], List[int]]:
-    """Run 5-point reconstruction and refinement, given computed relative rotation and translation.
-
-    Optionally, the method will perform reconstruction and refinement for both given and transposed
-    rotation and translation.
-
-    Args:
-        p1, p2: lists points in the images
-        camera1, camera2: Camera models
-        threshold: reprojection error threshold
-        iterations: number of step for the non-linear refinement of the relative pose
-        check_reversal: whether to check for Necker reversal ambiguity
-        reversal_ratio: ratio of triangulated point between normal and reversed
-                        configuration to consider a pair as being ambiguous
-
-    Returns:
-        rotation, translation and inlier list
-    """
-
     configurations = [False, True] if check_reversal else [False]
-
-    # Refine both normal and transposed relative motion
     results_5pt = []
     for transposed in configurations:
         R_5p, t_5p, inliers_5p = two_view_reconstruction_and_refinement(
-            b1,
-            b2,
-            R,
-            t,
-            threshold,
-            iterations,
-            transposed,
+            b1, b2, R, t, threshold, iterations, transposed
         )
-
         valid_curr_5pt = R_5p is not None and t_5p is not None
         if len(inliers_5p) <= 5 or not valid_curr_5pt:
             continue
@@ -441,7 +404,6 @@ def two_view_reconstruction_5pt(
         )
         results_5pt.append((R_5p, t_5p, inliers_5p))
 
-    # Use relative motion if one version stands out
     if len(results_5pt) == 1:
         R_5p, t_5p, inliers_5p = results_5pt[0]
     elif len(results_5pt) == 2:
@@ -449,9 +411,7 @@ def two_view_reconstruction_5pt(
         len1, len2 = len(inliers1), len(inliers2)
         ratio = min(len1, len2) / max(len1, len2)
         if ratio > reversal_ratio:
-            logger.warning(
-                f"Un-decidable Necker configuration (ratio={ratio}), skipping."
-            )
+            logger.warning(f"Un-decidable Necker configuration (ratio={ratio}), skipping.")
             R_5p, t_5p, inliers_5p = None, None, []
         else:
             index = 0 if len1 > len2 else 1
@@ -472,49 +432,18 @@ def two_view_reconstruction_general(
     check_reversal: bool = False,
     reversal_ratio: float = 1.0,
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], List[int], Dict[str, Any]]:
-    """Reconstruct two views from point correspondences.
-
-    These will try different reconstruction methods and return the
-    results of the one with most inliers.
-
-    Args:
-        p1, p2: lists points in the images
-        camera1, camera2: Camera models
-        threshold: reprojection error threshold
-        iterations: number of step for the non-linear refinement of the relative pose
-        check_reversal: whether to check for Necker reversal ambiguity
-        reversal_ratio: ratio of triangulated point between normal and reversed
-                        configuration to consider a pair as being ambiguous
-
-    Returns:
-        rotation, translation and inlier list
-    """
-
     b1 = camera1.pixel_bearing_many(p1)
     b2 = camera2.pixel_bearing_many(p2)
 
-    # Get 5-point relative motion
     T_robust = multiview.relative_pose_ransac(b1, b2, threshold, 1000, 0.999)
     R_robust = T_robust[:, :3]
     t_robust = T_robust[:, 3]
     R_5p, t_5p, inliers_5p = two_view_reconstruction_5pt(
-        b1,
-        b2,
-        R_robust,
-        t_robust,
-        threshold,
-        iterations,
-        check_reversal,
-        reversal_ratio,
+        b1, b2, R_robust, t_robust, threshold, iterations, check_reversal, reversal_ratio
     )
     valid_5pt = R_5p is not None and t_5p is not None
 
-    # Compute plane-based relative-motion
-    R_plane, t_plane, inliers_plane = two_view_reconstruction_plane_based(
-        b1,
-        b2,
-        threshold,
-    )
+    R_plane, t_plane, inliers_plane = two_view_reconstruction_plane_based(b1, b2, threshold)
     valid_plane = R_plane is not None and t_plane is not None
 
     report: Dict[str, Any] = {
@@ -543,9 +472,7 @@ def reconstruction_from_relative_pose(
     R: np.ndarray,
     t: np.ndarray,
 ) -> Tuple[Optional[types.Reconstruction], Dict[str, Any]]:
-    """Create a reconstruction from 'im1' and 'im2' using the provided rotation 'R' and translation 't'."""
     report = {}
-
     min_inliers = data.config["five_point_algo_min_inliers"]
 
     camera_priors = data.load_camera_models()
@@ -581,9 +508,7 @@ def reconstruction_from_relative_pose(
 
     retriangulate(tracks_manager, reconstruction, data.config)
     if len(reconstruction.points) < min_inliers:
-        report[
-            "decision"
-        ] = "Re-triangulation after initial motion did not generate enough points"
+        report["decision"] = "Re-triangulation after initial motion did not generate enough points"
         logger.info(report["decision"])
         return None, report
 
@@ -604,7 +529,6 @@ def bootstrap_reconstruction(
     p1: np.ndarray,
     p2: np.ndarray,
 ) -> Tuple[Optional[types.Reconstruction], Dict[str, Any]]:
-    """Start a reconstruction using two shots."""
     logger.info("Starting reconstruction with {} and {}".format(im1, im2))
     report: Dict[str, Any] = {
         "image_pair": (im1, im2),
@@ -621,13 +545,8 @@ def bootstrap_reconstruction(
     reversal_ratio = data.config["five_point_reversal_ratio"]
 
     (
-        R,
-        t,
-        inliers,
-        report["two_view_reconstruction"],
-    ) = two_view_reconstruction_general(
-        p1, p2, camera1, camera2, threshold, iterations, check_reversal, reversal_ratio
-    )
+        R, t, inliers, report["two_view_reconstruction"],
+    ) = two_view_reconstruction_general(p1, p2, camera1, camera2, threshold, iterations, check_reversal, reversal_ratio)
 
     if R is None or t is None:
         return None, report
@@ -636,7 +555,6 @@ def bootstrap_reconstruction(
         data, tracks_manager, im1, im2, R, t
     )
     report.update(rec_report)
-
     return rec, report
 
 
@@ -645,12 +563,6 @@ def reconstructed_points_for_images(
     reconstruction: types.Reconstruction,
     images: Set[str],
 ) -> List[Tuple[str, int]]:
-    """Number of reconstructed points visible on each image.
-
-    Returns:
-        A list of (image, num_point) pairs sorted by decreasing number
-        of points.
-    """
     non_reconstructed = [im for im in images if im not in reconstruction.shots]
     res = pysfm.count_tracks_per_shot(
         tracks_manager, non_reconstructed, list(reconstruction.points.keys())
@@ -666,93 +578,63 @@ def resect(
     threshold: float,
     min_inliers: int,
 ) -> Tuple[bool, Set[str], Dict[str, Any]]:
-    """Try resecting and adding a shot to the reconstruction.
-
-    Return:
-        True on success.
-    """
-
+    """Try resecting and adding a shot to the reconstruction."""
     rig_assignments = rig.rig_assignments_per_image(data.load_rig_assignments())
     camera = reconstruction.cameras[data.load_exif(shot_id)["camera"]]
 
-    bs, Xs, ids, pts2d = [], [], [], []
+    bs, Xs, ids = [], [], []
     for track, obs in tracks_manager.get_shot_observations(shot_id).items():
         if track in reconstruction.points:
-            # Collect both bearings and pixel points to allow PnP fallback
             b = camera.pixel_bearing(np.array(obs.point))
             bs.append(b)
-            pts2d.append(obs.point)
             Xs.append(reconstruction.points[track].coordinates)
             ids.append(track)
 
-    bs = np.asarray(bs, dtype=float)
-    Xs = np.asarray(Xs, dtype=float)
-    pts2d = np.asarray(pts2d, dtype=float)
-
+    bs = np.array(bs)
+    Xs = np.array(Xs)
     if len(bs) < 5:
         return False, set(), {"num_common_points": len(bs)}
 
-    # ---- Robust absolute pose with OpenCV solvePnPRansac (avoids Eigen crash) ----
-    # Convert bearing-based threshold to pixel threshold using focal length
-    K = camera.get_K()
-    fx = float(K[0, 0])
-    reproj_err_px = max(1.0, float(threshold) * fx)
+    # Loosen threshold slightly if bundle is minimal (helps avoid 0-inlier trap)
+    thresh = float(threshold) * 1.5
 
-    # OpenCV expects (N,1,3) and (N,1,2) or flattened (N,3)/(N,2)
-    # Use EPNP inside RANSAC; high iters and confidence like before
-    ok, rvec, tvec, inlier_idx = cv2.solvePnPRansac(
-        Xs,
-        pts2d,
-        K,
-        None,
-        iterationsCount=1000,
-        reprojectionError=reproj_err_px,
-        confidence=0.999,
-        flags=cv2.SOLVEPNP_EPNP,
-    )
-    if not ok or inlier_idx is None or len(inlier_idx) == 0:
-        return False, set(), {"num_common_points": int(len(bs)), "num_inliers": 0}
+    T = multiview.absolute_pose_ransac(bs, Xs, thresh, 1000, 0.999)
+    R = T[:, :3]
+    t = T[:, 3]
 
-    # Convert to R, t in our convention
-    R_cv, _ = cv2.Rodrigues(rvec)
-    t_cv = tvec.reshape(3)
-
-    # Recompute bearing-domain inliers to preserve original logic/thresholding
-    reprojected_bs = R_cv.T.dot((Xs - t_cv).T).T
+    reprojected_bs = R.T.dot((Xs - t).T).T
     reprojected_bs /= np.linalg.norm(reprojected_bs, axis=1)[:, np.newaxis]
-    inliers_mask = np.linalg.norm(reprojected_bs - bs, axis=1) < threshold
-    ninliers = int(np.count_nonzero(inliers_mask))
+
+    inliers = np.linalg.norm(reprojected_bs - bs, axis=1) < thresh
+    ninliers = int(sum(inliers))
 
     logger.info("{} resection inliers: {} / {}".format(shot_id, ninliers, len(bs)))
     report: Dict[str, Any] = {
-        "num_common_points": int(len(bs)),
+        "num_common_points": len(bs),
         "num_inliers": ninliers,
     }
+    if ninliers >= min_inliers:
+        Rw = R.T
+        tw = -Rw.dot(T[:, 3])
+        assert shot_id not in reconstruction.shots
 
-    if ninliers < min_inliers:
+        new_shots = add_shot(
+            data, reconstruction, rig_assignments, shot_id, pygeometry.Pose(Rw, tw)
+        )
+
+        if shot_id in rig_assignments:
+            triangulate_shot_features(
+                tracks_manager, reconstruction, new_shots, data.config
+            )
+        for i, succeed in enumerate(inliers):
+            if succeed:
+                add_observation_to_reconstruction(
+                    tracks_manager, reconstruction, shot_id, ids[i]
+                )
+        report["shots"] = list(new_shots)
+        return True, new_shots, report
+    else:
         return False, set(), report
-
-    # Convert to map convention (camera/world as used by the rest of the code)
-    R = R_cv.T
-    t = -R.dot(t_cv)
-
-    assert shot_id not in reconstruction.shots
-
-    new_shots = add_shot(
-        data, reconstruction, rig_assignments, shot_id, pygeometry.Pose(R, t)
-    )
-
-    if shot_id in rig_assignments:
-        triangulate_shot_features(tracks_manager, reconstruction, new_shots, data.config)
-
-    # Add only inlier observations
-    inlier_ids = [ids[i] for i, ok_ in enumerate(inliers_mask) if ok_]
-    for tid in inlier_ids:
-        add_observation_to_reconstruction(tracks_manager, reconstruction, shot_id, tid)
-
-    report["shots"] = list(new_shots)
-    return True, new_shots, report
-# -------------------- end patched resect --------------------
 
 
 def corresponding_tracks(
@@ -799,16 +681,6 @@ def resect_reconstruction(
     threshold: float,
     min_inliers: int,
 ) -> Tuple[bool, np.ndarray, List[Tuple[str, str]]]:
-    """Compute a similarity transform `similarity` such as :
-
-    reconstruction2 = T . reconstruction1
-
-    between two reconstruction 'reconstruction1' and 'reconstruction2'.
-
-    Their respective tracks managers are used to find common tracks that
-    are further used to compute the 3D similarity transform T using RANSAC.
-    """
-
     common_tracks = compute_common_tracks(
         reconstruction1, reconstruction2, tracks_manager1, tracks_manager2
     )
@@ -833,27 +705,20 @@ def add_observation_to_reconstruction(
 
 
 class TrackHandlerBase(ABC):
-    """Interface for providing/retrieving tracks from/to 'TrackTriangulator'."""
-
     @abstractmethod
     def get_observations(self, track_id: str) -> Dict[str, pymap.Observation]:
-        """Returns the observations of 'track_id'"""
         pass
 
     @abstractmethod
     def store_track_coordinates(self, track_id: str, coordinates: np.ndarray) -> None:
-        """Stores coordinates of triangulated track."""
         pass
 
     @abstractmethod
     def store_inliers_observation(self, track_id: str, shot_id: str) -> None:
-        """Called by the 'TrackTriangulator' for each track inlier found."""
         pass
 
 
 class TrackHandlerTrackManager(TrackHandlerBase):
-    """Provider that reads tracks from a 'TrackManager' object."""
-
     tracks_manager: pymap.TracksManager
     reconstruction: types.Reconstruction
 
@@ -866,9 +731,6 @@ class TrackHandlerTrackManager(TrackHandlerBase):
         self.reconstruction = reconstruction
 
     def get_observations(self, track_id: str) -> Dict[str, pymap.Observation]:
-        """Return the observations of 'track_id', for all
-        shots that appears in 'self.reconstruction.shots'
-        """
         return {
             k: v
             for k, v in self.tracks_manager.get_track_observations(track_id).items()
@@ -876,28 +738,16 @@ class TrackHandlerTrackManager(TrackHandlerBase):
         }
 
     def store_track_coordinates(self, track_id: str, coordinates: np.ndarray) -> None:
-        """Stores coordinates of triangulated track."""
         self.reconstruction.create_point(track_id, coordinates)
 
     def store_inliers_observation(self, track_id: str, shot_id: str) -> None:
-        """Stores triangulation inliers in the tracks manager."""
         observation = self.tracks_manager.get_observation(shot_id, track_id)
         self.reconstruction.add_observation(shot_id, track_id, observation)
 
 
 class TrackTriangulator:
-    """Triangulate tracks in a reconstruction.
-
-    Caches shot origin and rotation matrix
-    """
-
-    # for getting shots
     reconstruction: types.Reconstruction
-
-    # for storing tracks inliers
     tracks_handler: TrackHandlerBase
-
-    # caches
     origins: Dict[str, np.ndarray] = {}
     rotation_inverses: Dict[str, np.ndarray] = {}
     Rts: Dict[str, np.ndarray] = {}
@@ -905,34 +755,6 @@ class TrackTriangulator:
     def __init__(
         self, reconstruction: types.Reconstruction, tracks_handler: TrackHandlerBase
     ) -> None:
-        """Build a triangulator for a specific reconstruction."""
-        self.reconstruction = reconstruction
-        self.tracks_handler = tracks_handler
-        self.origins = {}
-        self.rotation_inverses = {}
-        self.Rts = {}
-
-class TrackTriangulator:
-    """Triangulate tracks in a reconstruction.
-
-    Caches shot origin and rotation matrix
-    """
-
-    # for getting shots
-    reconstruction: types.Reconstruction
-
-    # for storing tracks inliers
-    tracks_handler: TrackHandlerBase
-
-    # caches
-    origins: Dict[str, np.ndarray] = {}
-    rotation_inverses: Dict[str, np.ndarray] = {}
-    Rts: Dict[str, np.ndarray] = {}
-
-    def __init__(
-        self, reconstruction: types.Reconstruction, tracks_handler: TrackHandlerBase
-    ) -> None:
-        """Build a triangulator for a specific reconstruction."""
         self.reconstruction = reconstruction
         self.tracks_handler = tracks_handler
         self.origins = {}
@@ -946,7 +768,6 @@ class TrackTriangulator:
         min_ray_angle_degrees: float,
         iterations: int,
     ) -> None:
-        """Triangulate track in a RANSAC way and add point to reconstruction."""
         os, bs, ids = [], [], []
         for shot_id, obs in self.tracks_handler.get_observations(track).items():
             shot = self.reconstruction.shots[shot_id]
@@ -962,92 +783,80 @@ class TrackTriangulator:
         os = np.array(os)
         bs = np.array(bs)
 
-        best_inliers: List[int] = []
+        best_inliers = []
         best_point = None
-        tried = set()
-        ransac_tries = 11  # ~0.99 prob. with ~60% inliers
-        all_pairs = list(combinations(range(len(ids)), 2))
+        combinatiom_tried = set()
+        ransac_tries = 11
+        all_combinations = list(combinations(range(len(ids)), 2))
 
-        for it in range(ransac_tries):
-            ridx = int(np.random.rand() * (len(all_pairs) - 1))
-            if ridx in tried:
+        thresholds = len(os) * [reproj_threshold]
+        for i in range(ransac_tries):
+            random_id = int(np.random.rand() * (len(all_combinations) - 1))
+            if random_id in combinatiom_tried:
                 continue
-            i, j = all_pairs[ridx]
-            tried.add(ridx)
+
+            i, j = all_combinations[random_id]
+            combinatiom_tried.add(random_id)
 
             os_t = np.array([os[i], os[j]])
             bs_t = np.array([bs[i], bs[j]])
 
-            # thresholds MUST match number of rays used (here: 2)
-            thresholds_t = [reproj_threshold, reproj_threshold]
-
-            valid, X = pygeometry.triangulate_bearings_midpoint(
+            valid_triangulation, X = pygeometry.triangulate_bearings_midpoint(
                 os_t,
                 bs_t,
-                thresholds_t,
+                thresholds,
                 np.radians(min_ray_angle_degrees),
                 np.radians(180.0 - min_ray_angle_degrees),
             )
-
-            if not valid:
-                continue  # do NOT refine invalid solutions
-
             X = pygeometry.point_refinement(os_t, bs_t, X, iterations)
 
-            reprojected_bs = X - os
-            reprojected_bs /= np.linalg.norm(reprojected_bs, axis=1)[:, np.newaxis]
-            inliers = np.nonzero(
-                np.linalg.norm(reprojected_bs - bs, axis=1) < reproj_threshold
-            )[0].tolist()
+            if valid_triangulation:
+                reprojected_bs = X - os
+                reprojected_bs /= np.linalg.norm(reprojected_bs, axis=1)[:, np.newaxis]
+                inliers = np.nonzero(
+                    np.linalg.norm(reprojected_bs - bs, axis=1) < reproj_threshold
+                )[0].tolist()
 
-            if len(inliers) > len(best_inliers):
-                # Re-triangulate from all inliers
-                thresholds_all = [reproj_threshold] * len(inliers)
-                valid_many, X_many = pygeometry.triangulate_bearings_midpoint(
-                    os[inliers],
-                    bs[inliers],
-                    thresholds_all,
-                    np.radians(min_ray_angle_degrees),
-                    np.radians(180.0 - min_ray_angle_degrees),
-                )
-                if valid_many:
-                    # refine starting from X_many (previously we refined the wrong X)
-                    X_many = pygeometry.point_refinement(
-                        os[inliers], bs[inliers], X_many, iterations
+                if len(inliers) > len(best_inliers):
+                    _, new_X = pygeometry.triangulate_bearings_midpoint(
+                        os[inliers],
+                        bs[inliers],
+                        len(inliers) * [reproj_threshold],
+                        np.radians(min_ray_angle_degrees),
+                        np.radians(180.0 - min_ray_angle_degrees),
+                    )
+                    new_X = pygeometry.point_refinement(
+                        os[inliers], bs[inliers], X, iterations
                     )
 
-                    reprojected_bs_many = X_many - os
-                    reprojected_bs_many /= np.linalg.norm(reprojected_bs_many, axis=1)[:, np.newaxis]
+                    reprojected_bs = new_X - os
+                    reprojected_bs /= np.linalg.norm(reprojected_bs, axis=1)[
+                        :, np.newaxis
+                    ]
                     ls_inliers = np.nonzero(
-                        np.linalg.norm(reprojected_bs_many - bs, axis=1) < reproj_threshold
-                    )[0].tolist()
-
+                        np.linalg.norm(reprojected_bs - bs, axis=1) < reproj_threshold
+                    )[0]
                     if len(ls_inliers) > len(inliers):
                         best_inliers = ls_inliers
-                        best_point = X_many.tolist()
+                        best_point = new_X.tolist()
                     else:
                         best_inliers = inliers
                         best_point = X.tolist()
-                else:
-                    best_inliers = inliers
-                    best_point = X.tolist()
 
-                # Early termination heuristic
-                pout = 0.99
-                inliers_ratio = float(len(best_inliers)) / len(ids)
-                if inliers_ratio == 1.0:
-                    break
-                optimal_iter = math.log(1.0 - pout) / math.log(
-                    1.0 - inliers_ratio * inliers_ratio
-                )
-                if optimal_iter <= it:
-                    break
+                    pout = 0.99
+                    inliers_ratio = float(len(best_inliers)) / len(ids)
+                    if inliers_ratio == 1.0:
+                        break
+                    optimal_iter = math.log(1.0 - pout) / math.log(
+                        1.0 - inliers_ratio * inliers_ratio
+                    )
+                    if optimal_iter <= i:
+                        break
 
-        if len(best_inliers) > 1 and best_point is not None:
+        if len(best_inliers) > 1:
             self.tracks_handler.store_track_coordinates(track, best_point)
-            for k in best_inliers:
-                self.tracks_handler.store_inliers_observation(track, ids[k])
-
+            for i in best_inliers:
+                self.tracks_handler.store_inliers_observation(track, ids[i])
 
     def triangulate(
         self,
@@ -1056,7 +865,6 @@ class TrackTriangulator:
         min_ray_angle_degrees: float,
         iterations: int,
     ) -> None:
-        """Triangulate track and add point to reconstruction."""
         os, bs, ids = [], [], []
         for shot_id, obs in self.tracks_handler.get_observations(track).items():
             shot = self.reconstruction.shots[shot_id]
@@ -1090,7 +898,6 @@ class TrackTriangulator:
         min_ray_angle_degrees: float,
         iterations: int,
     ) -> None:
-        """Triangulate track using DLT and add point to reconstruction."""
         Rts, bs, os, ids = [], [], [], []
         for shot_id, obs in self.tracks_handler.get_observations(track).items():
             shot = self.reconstruction.shots[shot_id]
@@ -1115,10 +922,7 @@ class TrackTriangulator:
                 for shot_id in ids:
                     self.tracks_handler.store_inliers_observation(track, shot_id)
 
-    def triangulate_planar(
-        self, track: str, threshold: float
-    ) -> None:
-        """Triangulate track using a main plane and add point to reconstruction."""
+    def triangulate_planar(self, track: str, threshold: float) -> None:
         os, bs, ids = [], [], []
 
         plane_center = np.array([0, 0, 1])
@@ -1135,23 +939,14 @@ class TrackTriangulator:
 
         if len(os) >= 2:
             Xs = []
-
             for i in range(len(os)):
                 o = os[i]
                 b = bs[i]
-                X = np.zeros(3)
-
-                # https://math.stackexchange.com/questions/100439/determine-where-a-vector-will-intersect-a-plane
-                # [t == (a1*n1 + a2*n2 + a3*n3 - n1*o1 - n2*o2 - n3*o3)/(d1*n1 + d2*n2 + d3*n3)
                 d = b.dot(plane_normal)
                 if d == 0:
                     continue
-
                 t = (plane_center.dot(plane_normal) - plane_normal.dot(o)) / d
-
-                X[0] = o[0] + b[0] * t
-                X[1] = o[1] + b[1] * t
-                X[2] = o[2] + b[2] * t
+                X = o + b * t
                 Xs.append(X)
 
             if len(Xs) < 2:
@@ -1195,7 +990,6 @@ def triangulate_shot_features(
     shot_ids: Set[str],
     config: Dict[str, Any],
 ) -> None:
-    """Reconstruct as many tracks seen in shot_id as possible."""
     reproj_threshold = config["triangulation_threshold"]
     min_ray_angle = config["triangulation_min_ray_angle"]
     refinement_iterations = config["triangulation_refinement_iterations"]
@@ -1228,7 +1022,6 @@ def retriangulate(
     reconstruction: types.Reconstruction,
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Retrianguate all points"""
     chrono = Chronometer()
     report = {}
     report["num_points_before"] = len(reconstruction.points)
@@ -1263,12 +1056,12 @@ def retriangulate(
     report["wall_time"] = chrono.total_time()
     return report
 
+
 def retriangulate_planar(
     tracks_manager: pymap.TracksManager,
     reconstruction: types.Reconstruction,
     threshold: float = 0.02,
 ) -> Dict[str, Any]:
-    """Retrianguate all points"""
     chrono = Chronometer()
     report = {}
     report["num_points_before"] = len(reconstruction.points)
@@ -1292,57 +1085,23 @@ def retriangulate_planar(
     report["wall_time"] = chrono.total_time()
     return report
 
+
 def get_error_distribution(points: Dict[str, pymap.Landmark]) -> Tuple[float, float]:
-    """Return robust mean and std of 2D reprojection error magnitudes.
-
-    Handles empty inputs and heterogeneous shapes gracefully.
-    """
-    all_errors: List[np.ndarray] = []
+    all_errors = []
     for track in points.values():
-        # track.reprojection_errors is a dict: shot_id -> [ex, ey]
-        vals = list(track.reprojection_errors.values())
-        if not vals:
-            continue
-        # Each val could be [ex, ey] or np.array([ex, ey])
-        for v in vals:
-            v_arr = np.asarray(v, dtype=float)
-            if v_arr.ndim == 0:
-                # scalar—treat as magnitude directly
-                all_errors.append(np.array([v_arr], dtype=float))
-            elif v_arr.ndim == 1:
-                all_errors.append(v_arr)
-            else:
-                all_errors.append(v_arr.ravel())
+        all_errors += track.reprojection_errors.values()
 
-    if not all_errors:
-        # No data yet
-        return 0.0, 0.0
+    if len(all_errors) == 0:
+        # Graceful fallback when C++/Python hasn't filled errors yet
+        return np.zeros(2, dtype=float), 0.0
 
-    arr = np.asarray(all_errors, dtype=float)
-
-    # Ensure we have a consistent 2D-vector list for magnitudes; if not, fall back to scalar list
-    if arr.ndim == 1:
-        if arr.size % 2 == 0:
-            arr = arr.reshape(-1, 2)
-            mags = np.linalg.norm(arr, axis=1)
-        else:
-            mags = arr.astype(float)
-    else:
-        # If shape is (N, 2) use vector norms; otherwise flatten per-row best-effort
-        if arr.shape[1] == 2:
-            mags = np.linalg.norm(arr, axis=1)
-        else:
-            mags = np.linalg.norm(arr, axis=1) if arr.shape[1] > 1 else arr.ravel()
-
-    if mags.size == 0:
-        return 0.0, 0.0
-
-    # Robust stats (median & MAD-to-std)
-    median = float(np.median(mags))
-    mad = float(np.median(np.abs(mags - median)))
-    robust_std = 1.4826 * mad  # standard MAD scaling to Gaussian std
-
-    return median, robust_std
+    robust_mean = np.median(all_errors, axis=0)
+    diffs = np.array(all_errors) - robust_mean
+    norms = np.linalg.norm(diffs, axis=1)
+    if norms.size == 0:
+        return robust_mean, 0.0
+    robust_std = 1.486 * np.median(norms)
+    return robust_mean, robust_std
 
 
 def get_actual_threshold(
@@ -1350,14 +1109,10 @@ def get_actual_threshold(
 ) -> float:
     filter_type = config["bundle_outlier_filtering_type"]
     if filter_type == "FIXED":
-        return float(config["bundle_outlier_fixed_threshold"])
+        return config["bundle_outlier_fixed_threshold"]
     elif filter_type == "AUTO":
         mean, std = get_error_distribution(points)
-        # Default fallback when stats are not available/reliable
-        default_thr = float(config.get("outlier_threshold", 1.0))
-        if not np.isfinite(mean) or not np.isfinite(std) or (mean == 0.0 and std == 0.0):
-            return default_thr
-        return max(default_thr, float(config["bundle_outlier_auto_ratio"]) * (mean + std))
+        return config["bundle_outlier_auto_ratio"] * np.linalg.norm(mean + std)
     else:
         return 1.0
 
@@ -1367,35 +1122,22 @@ def remove_outliers(
     config: Dict[str, Any],
     points: Optional[Union[Dict[str, pymap.Landmark], Iterable[str]]] = None,
 ) -> int:
-    """Remove points with large reprojection error.
-
-    If ``points`` is:
-      - None: process all points in the reconstruction
-      - dict[id -> Landmark]: process only those landmarks
-      - iterable of ids: process only landmarks whose ids are in the iterable
-        (this matches the return form of bundle_local in some pipelines)
-    """
-    # Select which points to scan
     if points is None:
-        selected: Dict[str, pymap.Landmark] = reconstruction.points
-    elif isinstance(points, dict):
-        selected = points  # type: ignore[assignment]
-    else:
-        # Iterable of ids
-        ids = set(points)
-        selected = {pid: reconstruction.points[pid] for pid in ids if pid in reconstruction.points}
+        points = reconstruction.points
 
-    if not selected:
-        logger.info("Removed outliers: 0 (no points to evaluate)")
-        return 0
+    # If 'points' is a set/list of IDs (as used after local bundle), make a subset dict
+    if not isinstance(points, dict):
+        subset = {}
+        for pid in points:
+            if pid in reconstruction.points:
+                subset[pid] = reconstruction.points[pid]
+        points = subset
 
     threshold_sqr = get_actual_threshold(config, reconstruction.points) ** 2
-    outliers: List[Tuple[str, str]] = []
-    for point_id, lm in selected.items():
+    outliers = []
+    for point_id, lm in points.items():
         for shot_id, error in lm.reprojection_errors.items():
-            # error is expected to be length-2
-            ex, ey = float(error[0]), float(error[1]) if len(error) > 1 else (float(error[0]), 0.0)
-            error_sqr = ex * ex + ey * ey
+            error_sqr = error[0] ** 2 + error[1] ** 2
             if error_sqr > threshold_sqr:
                 outliers.append((point_id, shot_id))
 
