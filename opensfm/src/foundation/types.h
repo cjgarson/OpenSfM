@@ -11,6 +11,9 @@ using MatX = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
 using MatXf = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>;
 using MatXd = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>;
 
+template <typename T>
+using AlignedVector = std::vector<T, Eigen::aligned_allocator<T>>;
+
 template <class T>
 using Mat2 = Eigen::Matrix<T, 2, 2>;
 using Mat2f = Eigen::Matrix<float, 2, 2>;
