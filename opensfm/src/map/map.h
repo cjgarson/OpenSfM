@@ -108,22 +108,25 @@ class Map {
   RigInstance& CreateRigInstance(const RigInstanceId& instance_id);
   void         RemoveRigInstance(const RigInstanceId& instance_id);
 
-  // IMPORTANT: use aligned RigCameraMap here so pybind11 converts dict -> aligned map.
+  // Back-compat wrapper (matches definition in map.cc)
+  RigInstance& UpdateRigInstance(const RigInstance& other_rig_instance);
+
+  // Preferred overload taking aligned RigCameraMap (pybind dict -> aligned map)
   RigInstance& UpdateRigInstance(const RigInstance& other_rig_instance,
                                  const RigCameraMap& rig_cameras);
 
-  size_t            NumberOfRigCameras() const;
-  RigCamera&        GetRigCamera(const RigCameraId& rig_camera_id);
+  size_t              NumberOfRigCameras() const;
+  RigCamera&          GetRigCamera(const RigCameraId& rig_camera_id);
   const RigCameraMap& GetRigCameras() const { return rig_cameras_; }
   RigCameraMap&       GetRigCameras() { return rig_cameras_; }
-  bool              HasRigCamera(const RigCameraId& rig_camera_id) const;
+  bool                HasRigCamera(const RigCameraId& rig_camera_id) const;
 
-  size_t               NumberOfRigInstances() const;
-  RigInstance&         GetRigInstance(const RigInstanceId& instance_id);
-  const RigInstance&   GetRigInstance(const RigInstanceId& instance_id) const;
+  size_t                NumberOfRigInstances() const;
+  RigInstance&          GetRigInstance(const RigInstanceId& instance_id);
+  const RigInstance&    GetRigInstance(const RigInstanceId& instance_id) const;
   const RigInstanceMap& GetRigInstances() const { return rig_instances_; }
   RigInstanceMap&       GetRigInstances() { return rig_instances_; }
-  bool                 HasRigInstance(const RigInstanceId& instance_id) const;
+  bool                  HasRigInstance(const RigInstanceId& instance_id) const;
 
   // Landmark methods
   Landmark&           CreateLandmark(const LandmarkId& lm_id, const Vec3d& global_pos);
