@@ -126,7 +126,7 @@ BAHelpers::BundleLocal(
     const sfmmap::Map::RigCameraMap& rig_camera_priors,
     const AlignedVector<sfmmap::GroundControlPoint>& gcp,
     const sfmmap::ShotId& central_shot_id,
-    const py::dict& config)
+    const py::dict& config) {
 
   // Construct a minimal report; keep keys stable
   py::dict report;
