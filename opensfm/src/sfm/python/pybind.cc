@@ -2,6 +2,7 @@
 #include <foundation/python_types.h>
 #include <map/observation.h>
 #include <map/tracks_manager.h>
+#include <map/map.h>
 
 #include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
