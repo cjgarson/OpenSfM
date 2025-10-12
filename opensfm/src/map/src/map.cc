@@ -226,7 +226,7 @@ Shot& Map::CreatePanoShot(const ShotId& shot_id, const CameraId& camera_id,
 void Map::RemovePanoShot(const ShotId& shot_id) {
   auto shot_it = pano_shots_.find(shot_id);
   if (shot_it == pano_shots_.end()) {
-    throw std::runtime_error("Invalid ShotID " + shot_id);
+    throw std::runtime_error("Invalid PanoShotID " + shot_id);
   }
   const Shot& shot = shot_it->second;
   shot.GetRigInstance()->RemoveShot(shot_id);
@@ -366,14 +366,36 @@ void Map::RemoveRigInstance(const RigInstanceId& instance_id) {
   rig_instances_.erase(it_exist);
 }
 
-RigInstance& Map::UpdateRigInstance(const RigInstance& other_rig_instance) {
+// NEW: two-argument version (matches map.h)
+RigInstance& Map::UpdateRigInstance(const RigInstance& other_rig_instance,
+                                    const Map::RigCameraMap& rig_cameras) {
+  // Ensure instance exists (create if needed)
   auto it_exist = rig_instances_.find(other_rig_instance.GetId());
   if (it_exist == rig_instances_.end()) {
-    throw std::runtime_error("Rig instance does not exist.");
+    it_exist = rig_instances_.emplace(std::piecewise_construct,
+                                      std::forward_as_tuple(other_rig_instance.GetId()),
+                                      std::forward_as_tuple(other_rig_instance.GetId()))
+                   .first;
   }
   RigInstance& rig_instance = it_exist->second;
+
+  // Update pose (and any assignable state). We do NOT try to deep sync shot pointers here.
   rig_instance = other_rig_instance;
+
+  // Copy provided rig cameras into our aligned container to keep memory stable for pointers.
+  for (const auto& kv : rig_cameras) {
+    const RigCameraId& rcid = kv.first;
+    const RigCamera&   rc   = kv.second;
+    rig_cameras_[rcid] = rc;
+  }
+
   return rig_instance;
+}
+
+// Backward-compatibility wrapper for any old C++ callers
+RigInstance& Map::UpdateRigInstance(const RigInstance& other_rig_instance) {
+  static const Map::RigCameraMap kEmptyRigCameras;
+  return UpdateRigInstance(other_rig_instance, kEmptyRigCameras);
 }
 
 size_t Map::NumberOfRigCameras() const {
