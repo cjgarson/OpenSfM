@@ -51,14 +51,15 @@ def _get_camera_from_bundle(
 
 
 # --- Python-side safety net: compute reprojection errors if C++ BA didn't ---
-def _refresh_reprojection_errors_py(reconstruction: types.Reconstruction) -> None:
+def _refresh_reprojection_errors_py(reconstruction: types.Reconstruction,
+                                    tracks_manager: types.TracksManager) -> None:
     """Populate landmark.reprojection_errors[shot_id] with normalized-bearing delta."""
     for shot_id, shot in reconstruction.shots.items():
         cam = shot.camera
-        Rcw = shot.pose.get_rotation_matrix().T  # world->cam is Rcw; pose stores cam->world, so transpose
+        Rcw = shot.pose.get_rotation_matrix().T
         Cw = shot.pose.get_origin()
 
-        for track_id, obs in reconstruction.tracks_manager.get_shot_observations(shot_id).items():
+        for track_id, obs in tracks_manager.get_shot_observations(shot_id).items():
             if track_id not in reconstruction.points:
                 continue
             lm = reconstruction.points[track_id]
@@ -70,7 +71,6 @@ def _refresh_reprojection_errors_py(reconstruction: types.Reconstruction) -> Non
             n_obs = np.array([b_obs[0] / max(1e-12, b_obs[2]), b_obs[1] / max(1e-12, b_obs[2])])
             n_pred = np.array([Xc[0] / Xc[2], Xc[1] / Xc[2]])
             err = n_pred - n_obs
-            # Landmark reprojection_errors is a dict: shot_id -> np.array([ex, ey])
             lm.reprojection_errors[shot_id] = err.astype(float)
 
 
