@@ -147,7 +147,7 @@ BAHelpers::BundleLocal(
 // -----------------------------------------------------------------------------
 // Global bundle — no-op adjustment but returns a rich report with `brief_report`
 // -----------------------------------------------------------------------------
-pybind11::dict BAHelpers::Bundle(
+py::dict BAHelpers::Bundle(
     sfmmap::Map& map,
     const sfmmap::Map::CameraMap& camera_priors,
     const sfmmap::Map::RigCameraMap& rig_camera_priors,
@@ -171,7 +171,7 @@ pybind11::dict BAHelpers::Bundle(
 // -----------------------------------------------------------------------------
 // BundleShotPoses — keep signature stable and return a brief report
 // -----------------------------------------------------------------------------
-pybind11::dict BAHelpers::BundleShotPoses(
+py::dict BAHelpers::BundleShotPoses(
     sfmmap::Map& map,
     const std::unordered_set<std::string>& shot_ids,
     const sfmmap::Map::CameraMap& camera_priors,
