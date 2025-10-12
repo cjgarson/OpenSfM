@@ -31,16 +31,16 @@ class BAHelpers {
   // Global bundle
   static py::dict Bundle(
       sfmmap::Map& map,
-      const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-      const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+      const sfmmap::Map::CameraMap& camera_priors,
+      const sfmmap::Map::RigCameraMap& rig_camera_priors,
       const AlignedVector<sfmmap::GroundControlPoint>& gcp,
       const py::dict& config);
 
   // Local bundle around a central shot — returns (point_ids, report)
-  static py::tuple BundleLocal(
+  static std::pair<std::vector<std::string>, pybind11::dict> BundleLocal(
       sfmmap::Map& map,
-      const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-      const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+      const sfmmap::Map::CameraMap& camera_priors,
+      const sfmmap::Map::RigCameraMap& rig_camera_priors,
       const AlignedVector<sfmmap::GroundControlPoint>& gcp,
       const sfmmap::ShotId& central_shot_id,
       const py::dict& config);
@@ -48,9 +48,9 @@ class BAHelpers {
   // Bundle only poses (shots fixed set)
   static py::dict BundleShotPoses(
       sfmmap::Map& map,
-      const std::unordered_set<sfmmap::ShotId>& shot_ids,
-      const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-      const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+      const std::unordered_set<std::string>& shot_ids,
+      const sfmmap::Map::CameraMap& camera_priors,
+      const sfmmap::Map::RigCameraMap& rig_camera_priors,
       const py::dict& config);
 
   // Copy BA state back to the map
