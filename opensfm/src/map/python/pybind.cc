@@ -116,7 +116,11 @@ PYBIND11_MODULE(pymap, m) {
         sfmmap::RigCamera rc; rc.pose = pose; rc.id = std::move(id); return rc;
       }))
       .def_readwrite("id",   &sfmmap::RigCamera::id)
-      .def_readwrite("pose", &sfmmap::RigCamera::pose);
+      .def_readwrite("pose", &sfmmap::RigCamera::pose),
+          [](py::tuple s) {
+            return map::RigCamera(s[0].cast<geometry::Pose>(),
+                                  s[1].cast<map::RigCameraId>());
+          }));
 
   // RigInstance
   py::class_<sfmmap::RigInstance>(m, "RigInstance")
@@ -158,6 +162,92 @@ PYBIND11_MODULE(pymap, m) {
         }, py::return_value_policy::reference_internal)
       .def("remove_landmark", &sfmmap::Shot::RemoveLandmarkObservation);
 
+  // ---------------- CameraView bindings ----------------
+  py::class_<sfmmap::CameraView>(m, "CameraView")
+      .def(py::init<sfmmap::Map&>(), py::arg("map"),
+           "Create a camera view over the given Map")
+      .def("__len__", &sfmmap::CameraView::NumberOfCameras,
+           "Number of cameras in the map")
+      .def("__iter__",
+           [](const sfmmap::CameraView& cv) {
+             const auto& cams = cv.GetCameras();
+             return py::make_iterator(cams.begin(), cams.end());
+           },
+           py::keep_alive<0, 1>())
+      .def("keys",
+           [](const sfmmap::CameraView& cv) {
+             py::list out;
+             for (const auto& kv : cv.GetCameras()) out.append(kv.first);
+             return out;
+           })
+      .def("values",
+           [](sfmmap::CameraView& cv) {
+             py::list out;
+             for (const auto& kv : cv.GetCameras()) {
+               out.append(&cv.GetCamera(kv.first));
+             }
+             return out;
+           },
+           py::return_value_policy::reference_internal)
+      .def("items",
+           [](sfmmap::CameraView& cv) {
+             py::list out;
+             for (const auto& kv : cv.GetCameras()) {
+               out.append(py::make_tuple(kv.first, &cv.GetCamera(kv.first)));
+             }
+             return out;
+           },
+           py::return_value_policy::reference_internal)
+      .def("get", &sfmmap::CameraView::GetCamera, py::arg("camera_id"),
+           py::return_value_policy::reference_internal,
+           "Get a reference to a camera by id")
+      .def("__getitem__", &sfmmap::CameraView::GetCamera, py::arg("camera_id"),
+           py::return_value_policy::reference_internal)
+      .def("__contains__", &sfmmap::CameraView::HasCamera, py::arg("camera_id"));
+
+  // ---------------- RigCameraView bindings -------------
+  py::class_<sfmmap::RigCameraView>(m, "RigCameraView")
+      .def(py::init<sfmmap::Map&>(), py::arg("map"),
+           "Create a rig-camera view over the given Map")
+      .def("__len__", &sfmmap::RigCameraView::NumberOfRigCameras,
+           "Number of rig cameras in the map")
+      .def("__iter__",
+           [](const sfmmap::RigCameraView& rv) {
+             const auto& rcs = rv.GetRigCameras();
+             return py::make_iterator(rcs.begin(), rcs.end());
+           },
+           py::keep_alive<0, 1>())
+      .def("keys",
+           [](const sfmmap::RigCameraView& rv) {
+             py::list out;
+             for (const auto& kv : rv.GetRigCameras()) out.append(kv.first);
+             return out;
+           })
+      .def("values",
+           [](sfmmap::RigCameraView& rv) {
+             py::list out;
+             for (const auto& kv : rv.GetRigCameras()) {
+               out.append(&rv.GetRigCamera(kv.first));
+             }
+             return out;
+           },
+           py::return_value_policy::reference_internal)
+      .def("items",
+           [](sfmmap::RigCameraView& rv) {
+             py::list out;
+             for (const auto& kv : rv.GetRigCameras()) {
+               out.append(py::make_tuple(kv.first, &rv.GetRigCamera(kv.first)));
+             }
+             return out;
+           },
+           py::return_value_policy::reference_internal)
+      .def("get", &sfmmap::RigCameraView::GetRigCamera, py::arg("rig_camera_id"),
+           py::return_value_policy::reference_internal,
+           "Get a reference to a rig camera by id")
+      .def("__getitem__", &sfmmap::RigCameraView::GetRigCamera, py::arg("rig_camera_id"),
+           py::return_value_policy::reference_internal)
+      .def("__contains__", &sfmmap::RigCameraView::HasRigCamera, py::arg("rig_camera_id"));
+
   // Map (expose only the essentials needed by python side here)
   mapCls
       .def(py::init<>())
@@ -191,10 +281,14 @@ PYBIND11_MODULE(pymap, m) {
              -> const sfmmap::Map::ShotMap& {
              return m.GetShots();
            }, py::return_value_policy::reference_internal)
-
       .def("get_landmarks",
            [](sfmmap::Map& m)
              -> const sfmmap::Map::LandmarkMap& {
              return m.GetLandmarks();
-           }, py::return_value_policy::reference_internal);
+           }, py::return_value_policy::reference_internal)
+      // The two accessors Python expects (per types.py and pymap.pyi):
+      .def("get_cameras", &sfmmap::Map::GetCameraView,
+           py::return_value_policy::move)
+      .def("get_camera_view", &sfmmap::Map::GetCameraView,
+           py::return_value_policy::move);
 }
