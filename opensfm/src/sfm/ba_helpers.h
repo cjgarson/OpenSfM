@@ -37,7 +37,7 @@ class BAHelpers {
       const py::dict& config);
 
   // Local bundle around a central shot — returns (point_ids, report)
-  static std::pair<std::vector<std::string>, pybind11::dict> BundleLocal(
+  static pybind11::tuple BundleLocal(
       sfmmap::Map& map,
       const sfmmap::Map::CameraMap& camera_priors,
       const sfmmap::Map::RigCameraMap& rig_camera_priors,
