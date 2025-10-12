@@ -623,7 +623,13 @@ PYBIND11_MODULE(pymap, m) {
            py::return_value_policy::reference_internal)
       .def("create_rig_instance", &sfmmap::Map::CreateRigInstance,
            py::return_value_policy::reference_internal)
-      .def("update_rig_instance", &sfmmap::Map::UpdateRigInstance,
+      .def("update_rig_instance",
+           (sfmmap::RigInstance& (sfmmap::Map::*)(
+               const sfmmap::RigInstance&,
+               const sfmmap::Map::RigCameraMap&))
+           &sfmmap::Map::UpdateRigInstance,
+           py::arg("other_rig_instance"),
+           py::arg("rig_cameras"),
            py::return_value_policy::reference_internal)
       .def("remove_rig_instance", &sfmmap::Map::RemoveRigInstance)
       // Landmark
