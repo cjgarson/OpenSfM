@@ -162,7 +162,7 @@ PYBIND11_MODULE(pymap, m) {
       .def_property("vertices", &sfmmap::ShotMesh::GetVertices, &sfmmap::ShotMesh::SetVertices);
 
   // -----------------------------------------------------------------------------
-  // RigCamera (POD + pickle) — expose factory ctor matching Python call
+  // RigCamera (POD + pickle)
   // -----------------------------------------------------------------------------
   py::class_<sfmmap::RigCamera>(m, "RigCamera")
       .def(py::init<>())
@@ -172,13 +172,9 @@ PYBIND11_MODULE(pymap, m) {
       .def_readwrite("id",   &sfmmap::RigCamera::id)
       .def_readwrite("pose", &sfmmap::RigCamera::pose)
       .def(py::pickle(
-          [](const sfmmap::RigCamera &rc) {         // __getstate__
-            return py::make_tuple(rc.pose, rc.id);
-          },
-          [](py::tuple s) {                          // __setstate__
-            if (s.size() != 2) {
-              throw std::runtime_error("Invalid state for RigCamera: expected (pose, id)");
-            }
+          [](const sfmmap::RigCamera &rc) { return py::make_tuple(rc.pose, rc.id); },
+          [](py::tuple s) {
+            if (s.size() != 2) throw std::runtime_error("Invalid state for RigCamera");
             sfmmap::RigCamera rc;
             rc.pose = s[0].cast<geometry::Pose>();
             rc.id   = s[1].cast<sfmmap::RigCameraId>();
@@ -623,16 +619,25 @@ PYBIND11_MODULE(pymap, m) {
            py::return_value_policy::reference_internal)
       .def("create_rig_instance", &sfmmap::Map::CreateRigInstance,
            py::return_value_policy::reference_internal)
-      // one-arg overload used by types.py
+      // one-arg overload (used by types.py)
       .def("update_rig_instance",
            (sfmmap::RigInstance& (sfmmap::Map::*)(const sfmmap::RigInstance&))
-               &sfmmap::Map::UpdateRigInstance,
+             &sfmmap::Map::UpdateRigInstance,
            py::return_value_policy::reference_internal)
-      // two-arg overload variant
+      // two-arg overload with safe dict->aligned map conversion
       .def("update_rig_instance",
-           (sfmmap::RigInstance& (sfmmap::Map::*)(const sfmmap::RigInstance&,
-                                                  const sfmmap::Map::RigCameraMap&))
-               &sfmmap::Map::UpdateRigInstance,
+           [](sfmmap::Map& self,
+              const sfmmap::RigInstance& other_rig_instance,
+              py::dict rig_cameras_dict) -> sfmmap::RigInstance& {
+             sfmmap::Map::RigCameraMap aligned_rcs;
+             aligned_rcs.reserve(rig_cameras_dict.size());
+             for (auto item : rig_cameras_dict) {
+               const auto id  = item.first.cast<sfmmap::RigCameraId>();
+               const auto rc  = item.second.cast<sfmmap::RigCamera>();
+               aligned_rcs.emplace(id, rc);
+             }
+             return self.UpdateRigInstance(other_rig_instance, aligned_rcs);
+           },
            py::arg("other_rig_instance"),
            py::arg("rig_cameras"),
            py::return_value_policy::reference_internal)
