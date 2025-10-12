@@ -50,30 +50,6 @@ def _get_camera_from_bundle(
         camera.set_parameter_value(k, v)
 
 
-# --- Python-side safety net: compute reprojection errors if C++ BA didn't ---
-def _refresh_reprojection_errors_py(reconstruction: types.Reconstruction,
-                                    tracks_manager: types.TracksManager) -> None:
-    """Populate landmark.reprojection_errors[shot_id] with normalized-bearing delta."""
-    for shot_id, shot in reconstruction.shots.items():
-        cam = shot.camera
-        Rcw = shot.pose.get_rotation_matrix().T
-        Cw = shot.pose.get_origin()
-
-        for track_id, obs in tracks_manager.get_shot_observations(shot_id).items():
-            if track_id not in reconstruction.points:
-                continue
-            lm = reconstruction.points[track_id]
-            Xw = lm.coordinates
-            Xc = Rcw.dot(Xw - Cw)
-            if abs(Xc[2]) < 1e-12:
-                continue
-            b_obs = cam.pixel_bearing(np.array(obs.point))
-            n_obs = np.array([b_obs[0] / max(1e-12, b_obs[2]), b_obs[1] / max(1e-12, b_obs[2])])
-            n_pred = np.array([Xc[0] / Xc[2], Xc[1] / Xc[2]])
-            err = n_pred - n_obs
-            lm.reprojection_errors[shot_id] = err.astype(float)
-
-
 def bundle(
     reconstruction: types.Reconstruction,
     camera_priors: Dict[str, pygeometry.Camera],
@@ -93,16 +69,6 @@ def bundle(
     # Always provide brief_report to avoid KeyError
     if "brief_report" not in report:
         report["brief_report"] = "bundle finished (safe-minimal/python-augmented)"
-
-    # If reprojection_errors are missing (common right after bootstrap), compute them here.
-    # We check a couple of landmarks; if empty, refresh them all.
-    need_refresh = True
-    for _, lm in reconstruction.points.items():
-        if lm.reprojection_errors:
-            need_refresh = False
-            break
-    if need_refresh:
-        _refresh_reprojection_errors_py(reconstruction)
 
     logger.debug(report["brief_report"])
     return report
@@ -124,8 +90,7 @@ def bundle_shot_poses(
     )
     if "brief_report" not in report:
         report["brief_report"] = "bundle_shot_poses finished (safe-minimal)"
-    # Refresh reprojection errors only for these shots
-    _refresh_reprojection_errors_py(reconstruction)
+
     logger.debug(report["brief_report"])
     return report
 
@@ -148,7 +113,6 @@ def bundle_local(
     )
     if "brief_report" not in report:
         report["brief_report"] = "local bundle finished (safe-minimal)"
-    _refresh_reprojection_errors_py(reconstruction)
     logger.debug(report["brief_report"])
     return pt_ids, report
 
