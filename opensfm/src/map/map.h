@@ -90,6 +90,9 @@ class Map {
   void        RemoveShot(const ShotId& shot_id);
   ShotView    GetShotView();
 
+  std::unordered_map<sfmmap::LandmarkId, sfmmap::Observation>
+  GetShotObservations(const sfmmap::ShotId& shot_id) const;
+
   // Panoramic shot methods
   Shot& CreatePanoShot(const ShotId& shot_id, const CameraId& camera_id,
                        const RigCameraId& rig_camera_id, const RigInstanceId& instance_id,
