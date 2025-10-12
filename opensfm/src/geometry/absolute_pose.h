@@ -18,7 +18,9 @@ Eigen::Matrix3d RotationMatrixAroundAxis(const double cos_theta,
 template <class IT>
 std::vector<Eigen::Matrix<double, 3, 4>> AbsolutePoseThreePoints(IT begin,
                                                                  IT end) {
-  std::vector<Eigen::Matrix<double, 3, 4>> RTs;
+std::vector<Eigen::Matrix<double, 3, 4>,
+            Eigen::aligned_allocator<Eigen::Matrix<double, 3, 4>>> RTs;
+RTs.reserve(6);
 
   const Eigen::Vector3d b1 = begin->first;
   const Eigen::Vector3d b2 = (begin + 1)->first;
