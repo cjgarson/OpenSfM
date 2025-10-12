@@ -490,10 +490,10 @@ Map::ComputeReprojectionErrors(const TracksManager& tracks_manager, const ErrorT
 
 std::unordered_map<sfmmap::LandmarkId, sfmmap::Observation>
 Map::GetShotObservations(const sfmmap::ShotId& shot_id) const {
-    std::unordered_map<LandmarkId, Observation> result;
+    std::unordered_map<sfmmap::LandmarkId, sfmmap::Observation> result;
     const auto& shot = GetShot(shot_id);
     for (const auto& kv : shot.GetLandmarkObservations()) {
-        result[Landmark->id_] = kv.second;
+        result[kv.first] = kv.second;
     }
     return result;
 }
