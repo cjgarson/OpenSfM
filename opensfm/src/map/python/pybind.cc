@@ -162,11 +162,10 @@ PYBIND11_MODULE(pymap, m) {
       .def_property("vertices", &sfmmap::ShotMesh::GetVertices, &sfmmap::ShotMesh::SetVertices);
 
   // -----------------------------------------------------------------------------
-  // RigCamera (simple struct + pickle)
+  // RigCamera (POD + pickle)  *** no (Pose, Id) ctor in this fork ***
   // -----------------------------------------------------------------------------
   py::class_<sfmmap::RigCamera>(m, "RigCamera")
       .def(py::init<>())
-      .def(py::init<const geometry::Pose&, const sfmmap::RigCameraId&>())
       .def_readwrite("id",   &sfmmap::RigCamera::id)
       .def_readwrite("pose", &sfmmap::RigCamera::pose)
       .def(py::pickle(
@@ -174,8 +173,13 @@ PYBIND11_MODULE(pymap, m) {
             return py::make_tuple(rc.pose, rc.id);
           },
           [](py::tuple s) {                          // __setstate__
-            return sfmmap::RigCamera(s[0].cast<geometry::Pose>(),
-                                     s[1].cast<sfmmap::RigCameraId>());
+            if (s.size() != 2) {
+              throw std::runtime_error("Invalid state for RigCamera: expected (pose, id)");
+            }
+            sfmmap::RigCamera rc;
+            rc.pose = s[0].cast<geometry::Pose>();
+            rc.id   = s[1].cast<sfmmap::RigCameraId>();
+            return rc;
           }));
 
   // -----------------------------------------------------------------------------
@@ -183,30 +187,33 @@ PYBIND11_MODULE(pymap, m) {
   // -----------------------------------------------------------------------------
   py::class_<sfmmap::RigInstance>(m, "RigInstance")
       .def(py::init<sfmmap::RigInstanceId>())
-      .def_readwrite("id", &sfmmap::RigInstance::id)
+      .def_property_readonly("id", &sfmmap::RigInstance::GetId)
+      .def_property("pose",
+        [](const sfmmap::RigInstance& ri) -> const geometry::Pose& { return ri.GetPose(); },
+        [](sfmmap::RigInstance& ri, const geometry::Pose& p) { ri.SetPose(p); },
+        py::return_value_policy::reference_internal)
       .def_property_readonly("shots",
-           py::overload_cast<>(&sfmmap::RigInstance::GetShots),
-           py::return_value_policy::reference_internal)
+        [](const sfmmap::RigInstance& ri)
+          -> const std::unordered_map<sfmmap::ShotId, sfmmap::Shot*>& { return ri.GetShots(); },
+        py::return_value_policy::reference_internal)
       .def_property_readonly("rig_cameras",
-           py::overload_cast<>(&sfmmap::RigInstance::GetRigCameras),
-           py::return_value_policy::reference_internal)
+        [](const sfmmap::RigInstance& ri)
+          -> const std::unordered_map<sfmmap::ShotId, sfmmap::RigCamera*>& { return ri.GetRigCameras(); },
+        py::return_value_policy::reference_internal)
       .def_property_readonly("rig_camera_ids",
-           [](const sfmmap::RigInstance &ri) {
-             std::map<sfmmap::ShotId, sfmmap::RigCameraId> ids;
-             for (const auto &rc : ri.GetRigCameras()) ids[rc.first] = rc.second->id;
-             return ids;
-           })
+        [](const sfmmap::RigInstance &ri) {
+          std::map<sfmmap::ShotId, sfmmap::RigCameraId> ids;
+          for (const auto &rc : ri.GetRigCameras()) ids[rc.first] = rc.second->id;
+          return ids;
+        })
       .def_property_readonly("camera_ids",
-           [](const sfmmap::RigInstance &ri) {
-             std::map<sfmmap::ShotId, sfmmap::CameraId> ids;
-             for (const auto &sh : ri.GetShots()) ids[sh.first] = sh.second->GetCamera()->id;
-             return ids;
-           })
+        [](const sfmmap::RigInstance &ri) {
+          std::map<sfmmap::ShotId, sfmmap::CameraId> ids;
+          for (const auto &sh : ri.GetShots()) ids[sh.first] = sh.second->GetCamera()->id;
+          return ids;
+        })
       .def("keys", &sfmmap::RigInstance::GetShotIDs)
-      .def_property("pose", py::overload_cast<>(&sfmmap::RigInstance::GetPose),
-                    &sfmmap::RigInstance::SetPose,
-                    py::return_value_policy::reference_internal)
-      .def("add_shot", &sfmmap::RigInstance::AddShot)
+      .def("add_shot",    &sfmmap::RigInstance::AddShot)
       .def("remove_shot", &sfmmap::RigInstance::RemoveShot)
       .def("update_instance_pose_with_shot", &sfmmap::RigInstance::UpdateInstancePoseWithShot)
       .def("update_rig_camera_pose",        &sfmmap::RigInstance::UpdateRigCameraPose);
@@ -314,17 +321,17 @@ PYBIND11_MODULE(pymap, m) {
       .def(py::init<sfmmap::Map&>(), py::keep_alive<1, 2>())
       .def("__len__", &sfmmap::PanoShotView::NumberOfShots)
       .def("items",
-           [](const sfmmap::PanoShotView &sv) {
-             auto &shots = sv.GetShots();
-             return py::make_ref_iterator(shots.begin(), shots.end());
-           },
-           py::keep_alive<0, 1>())
+           [](sfmmap::PanoShotView &sv) {
+             py::list out;
+             for (auto &kv : sv.GetShots()) out.append(py::make_tuple(kv.first, kv.second));
+             return out;
+           })
       .def("values",
-           [](const sfmmap::PanoShotView &sv) {
-             auto &shots = sv.GetShots();
-             return py::make_ref_value_iterator(shots.begin(), shots.end());
-           },
-           py::keep_alive<0, 1>())
+           [](sfmmap::PanoShotView &sv) {
+             py::list out;
+             for (auto &kv : sv.GetShots()) out.append(kv.second);
+             return out;
+           })
       .def("__iter__",
            [](const sfmmap::PanoShotView &sv) {
              const auto &shots = sv.GetShots();
@@ -350,17 +357,17 @@ PYBIND11_MODULE(pymap, m) {
       .def(py::init<sfmmap::Map&>(), py::keep_alive<1, 2>())
       .def("__len__", &sfmmap::ShotView::NumberOfShots)
       .def("items",
-           [](const sfmmap::ShotView &sv) {
-             const auto &shots = sv.GetShots();
-             return py::make_ref_iterator(shots.begin(), shots.end());
-           },
-           py::keep_alive<0, 1>())
+           [](sfmmap::ShotView &sv) {
+             py::list out;
+             for (auto &kv : sv.GetShots()) out.append(py::make_tuple(kv.first, kv.second));
+             return out;
+           })
       .def("values",
-           [](const sfmmap::ShotView &sv) {
-             const auto &shots = sv.GetShots();
-             return py::make_ref_value_iterator(shots.begin(), shots.end());
-           },
-           py::keep_alive<0, 1>())
+           [](sfmmap::ShotView &sv) {
+             py::list out;
+             for (auto &kv : sv.GetShots()) out.append(kv.second);
+             return out;
+           })
       .def("__iter__",
            [](const sfmmap::ShotView &sv) {
              const auto &shots = sv.GetShots();
@@ -386,17 +393,17 @@ PYBIND11_MODULE(pymap, m) {
       .def(py::init<sfmmap::Map&>(), py::keep_alive<1, 2>())
       .def("__len__", &sfmmap::LandmarkView::NumberOfLandmarks)
       .def("items",
-           [](const sfmmap::LandmarkView &sv) {
-             auto &lms = sv.GetLandmarks();
-             return py::make_ref_iterator(lms.begin(), lms.end());
-           },
-           py::keep_alive<0, 1>())
+           [](sfmmap::LandmarkView &sv) {
+             py::list out;
+             for (auto &kv : sv.GetLandmarks()) out.append(py::make_tuple(kv.first, kv.second));
+             return out;
+           })
       .def("values",
-           [](const sfmmap::LandmarkView &sv) {
-             auto &lms = sv.GetLandmarks();
-             return py::make_ref_value_iterator(lms.begin(), lms.end());
-           },
-           py::keep_alive<0, 1>())
+           [](sfmmap::LandmarkView &sv) {
+             py::list out;
+             for (auto &kv : sv.GetLandmarks()) out.append(kv.second);
+             return out;
+           })
       .def("__iter__",
            [](const sfmmap::LandmarkView &sv) {
              const auto &lms = sv.GetLandmarks();
@@ -422,17 +429,19 @@ PYBIND11_MODULE(pymap, m) {
       .def(py::init<sfmmap::Map&>(), py::keep_alive<1, 2>())
       .def("__len__", &sfmmap::CameraView::NumberOfCameras)
       .def("items",
-           [](const sfmmap::CameraView &sv) {
-             const auto &cams = sv.GetCameras();
-             return py::make_iterator(cams.begin(), cams.end());
-           },
-           py::keep_alive<0, 1>())
+           [](sfmmap::CameraView &sv) {
+             py::list out;
+             for (const auto &kv : sv.GetCameras())
+               out.append(py::make_tuple(kv.first, &sv.GetCamera(kv.first)));
+             return out;
+           })
       .def("values",
            [](sfmmap::CameraView &sv) {
-             auto &cams = sv.GetCameras();
-             return py::make_ref_value_iterator(cams.begin(), cams.end());
-           },
-           py::keep_alive<0, 1>())
+             py::list out;
+             for (const auto &kv : sv.GetCameras())
+               out.append(&sv.GetCamera(kv.first));
+             return out;
+           }, py::return_value_policy::reference_internal)
       .def("__iter__",
            [](const sfmmap::CameraView &sv) {
              const auto &cams = sv.GetCameras();
@@ -458,17 +467,19 @@ PYBIND11_MODULE(pymap, m) {
       .def(py::init<sfmmap::Map&>(), py::keep_alive<1, 2>())
       .def("__len__", &sfmmap::BiasView::NumberOfBiases)
       .def("items",
-           [](const sfmmap::BiasView &sv) {
-             const auto &biases = sv.GetBiases();
-             return py::make_iterator(biases.begin(), biases.end());
-           },
-           py::keep_alive<0, 1>())
+           [](sfmmap::BiasView &sv) {
+             py::list out;
+             for (const auto &kv : sv.GetBiases())
+               out.append(py::make_tuple(kv.first, &sv.GetBias(kv.first)));
+             return out;
+           })
       .def("values",
            [](sfmmap::BiasView &sv) {
-             auto &biases = sv.GetBiases();
-             return py::make_ref_value_iterator(biases.begin(), biases.end());
-           },
-           py::keep_alive<0, 1>())
+             py::list out;
+             for (const auto &kv : sv.GetBiases())
+               out.append(&sv.GetBias(kv.first));
+             return out;
+           }, py::return_value_policy::reference_internal)
       .def("__iter__",
            [](const sfmmap::BiasView &sv) {
              const auto &biases = sv.GetBiases();
@@ -494,17 +505,19 @@ PYBIND11_MODULE(pymap, m) {
       .def(py::init<sfmmap::Map&>(), py::keep_alive<1, 2>())
       .def("__len__", &sfmmap::RigCameraView::NumberOfRigCameras)
       .def("items",
-           [](const sfmmap::RigCameraView &sv) {
-             const auto &cams = sv.GetRigCameras();
-             return py::make_iterator(cams.begin(), cams.end());
-           },
-           py::keep_alive<0, 1>())
+           [](sfmmap::RigCameraView &sv) {
+             py::list out;
+             for (const auto &kv : sv.GetRigCameras())
+               out.append(py::make_tuple(kv.first, &sv.GetRigCamera(kv.first)));
+             return out;
+           })
       .def("values",
            [](sfmmap::RigCameraView &sv) {
-             auto &cams = sv.GetRigCameras();
-             return py::make_ref_value_iterator(cams.begin(), cams.end());
-           },
-           py::keep_alive<0, 1>())
+             py::list out;
+             for (const auto &kv : sv.GetRigCameras())
+               out.append(&sv.GetRigCamera(kv.first));
+             return out;
+           }, py::return_value_policy::reference_internal)
       .def("__iter__",
            [](const sfmmap::RigCameraView &sv) {
              const auto &cams = sv.GetRigCameras();
@@ -530,21 +543,23 @@ PYBIND11_MODULE(pymap, m) {
       .def(py::init<sfmmap::Map&>(), py::keep_alive<1, 2>())
       .def("__len__", &sfmmap::RigInstanceView::NumberOfRigInstances)
       .def("items",
-           [](const sfmmap::RigInstanceView &sv) {
-             const auto &instances = sv.GetRigInstances();
-             return py::make_iterator(instances.begin(), instances.end());
-           },
-           py::keep_alive<0, 1>())
+           [](sfmmap::RigInstanceView &sv) {
+             py::list out;
+             for (const auto &kv : sv.GetRigInstances())
+               out.append(py::make_tuple(kv.first, &sv.GetRigInstance(kv.first)));
+             return out;
+           })
       .def("values",
            [](sfmmap::RigInstanceView &sv) {
-             auto &instances = sv.GetRigInstances();
-             return py::make_ref_value_iterator(instances.begin(), instances.end());
-           },
-           py::keep_alive<0, 1>())
+             py::list out;
+             for (const auto &kv : sv.GetRigInstances())
+               out.append(&sv.GetRigInstance(kv.first));
+             return out;
+           }, py::return_value_policy::reference_internal)
       .def("__iter__",
            [](const sfmmap::RigInstanceView &sv) {
              const auto &instances = sv.GetRigInstances();
-             return py::make_iterator(instances.begin(), instances.end());
+             return py::make_key_iterator(instances.begin(), instances.end());
            },
            py::keep_alive<0, 1>())
       .def("keys",
@@ -571,8 +586,9 @@ PYBIND11_MODULE(pymap, m) {
       .def("create_camera", &sfmmap::Map::CreateCamera, py::arg("camera"),
            py::return_value_policy::reference_internal)
       .def("get_camera",
-           py::overload_cast<const sfmmap::CameraId&>(&sfmmap::Map::GetCamera),
-           py::return_value_policy::reference_internal)
+           [](sfmmap::Map &m, const sfmmap::CameraId &id) -> geometry::Camera& {
+             return m.GetCamera(id);
+           }, py::return_value_policy::reference_internal)
       // Bias
       .def("set_bias", &sfmmap::Map::SetBias,
            py::return_value_policy::reference_internal)
@@ -596,26 +612,28 @@ PYBIND11_MODULE(pymap, m) {
            (void (sfmmap::Map::*)(const sfmmap::LandmarkId&))     &sfmmap::Map::RemoveLandmark)
       .def("has_landmark", &sfmmap::Map::HasLandmark)
       .def("get_landmark",
-           py::overload_cast<const sfmmap::LandmarkId&>(&sfmmap::Map::GetLandmark),
-           py::return_value_policy::reference_internal)
+           [](sfmmap::Map &m, const sfmmap::LandmarkId &id) -> sfmmap::Landmark& {
+             return m.GetLandmark(id);
+           }, py::return_value_policy::reference_internal)
       .def("clear_observations_and_landmarks", &sfmmap::Map::ClearObservationsAndLandmarks)
       .def("clean_landmarks_below_min_observations",
            &sfmmap::Map::CleanLandmarksBelowMinObservations)
       // Shot
       .def("create_shot",
-           py::overload_cast<const sfmmap::ShotId&, const sfmmap::CameraId&,
-                             const sfmmap::RigCameraId&, const sfmmap::RigInstanceId&,
-                             const geometry::Pose&>(&sfmmap::Map::CreateShot),
+           (sfmmap::Shot& (sfmmap::Map::*)(const sfmmap::ShotId&, const sfmmap::CameraId&,
+                                           const sfmmap::RigCameraId&, const sfmmap::RigInstanceId&,
+                                           const geometry::Pose&)) &sfmmap::Map::CreateShot,
            py::return_value_policy::reference_internal)
       .def("create_shot",
-           py::overload_cast<const sfmmap::ShotId&, const sfmmap::CameraId&,
-                             const sfmmap::RigCameraId&, const sfmmap::RigInstanceId&>(
-                             &sfmmap::Map::CreateShot),
+           (sfmmap::Shot& (sfmmap::Map::*)(const sfmmap::ShotId&, const sfmmap::CameraId&,
+                                           const sfmmap::RigCameraId&, const sfmmap::RigInstanceId&))
+                                           &sfmmap::Map::CreateShot,
            py::return_value_policy::reference_internal)
       .def("remove_shot", &sfmmap::Map::RemoveShot)
       .def("get_shot",
-           py::overload_cast<const sfmmap::ShotId&>(&sfmmap::Map::GetShot),
-           py::return_value_policy::reference_internal)
+           [](sfmmap::Map &m, const sfmmap::ShotId &id) -> sfmmap::Shot& {
+             return m.GetShot(id);
+           }, py::return_value_policy::reference_internal)
       .def("update_shot", &sfmmap::Map::UpdateShot,
            py::return_value_policy::reference_internal)
       // Pano Shot
@@ -623,8 +641,9 @@ PYBIND11_MODULE(pymap, m) {
            py::return_value_policy::reference_internal)
       .def("remove_pano_shot", &sfmmap::Map::RemovePanoShot)
       .def("get_pano_shot",
-           py::overload_cast<const sfmmap::ShotId&>(&sfmmap::Map::GetPanoShot),
-           py::return_value_policy::reference_internal)
+           [](sfmmap::Map &m, const sfmmap::ShotId &id) -> sfmmap::Shot& {
+             return m.GetPanoShot(id);
+           }, py::return_value_policy::reference_internal)
       .def("update_pano_shot", &sfmmap::Map::UpdatePanoShot,
            py::return_value_policy::reference_internal)
       // Observation
