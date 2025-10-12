@@ -116,7 +116,7 @@ PYBIND11_MODULE(pymap, m) {
         sfmmap::RigCamera rc; rc.pose = pose; rc.id = std::move(id); return rc;
       }))
       .def_readwrite("id",   &sfmmap::RigCamera::id)
-      .def_readwrite("pose", &sfmmap::RigCamera::pose),
+      .def_readwrite("pose", &sfmmap::RigCamera::pose)
           [](py::tuple s) {
             return map::RigCamera(s[0].cast<geometry::Pose>(),
                                   s[1].cast<map::RigCameraId>());
