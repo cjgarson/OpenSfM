@@ -26,16 +26,16 @@ class BAHelpers {
   // Global bundle
   static py::dict Bundle(
       sfmmap::Map& map,
-      const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-      const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+      const sfmmap::Map::CameraMap&    camera_priors,
+      const sfmmap::Map::RigCameraMap& rig_camera_priors,
       const AlignedVector<sfmmap::GroundControlPoint>& gcp,
       const py::dict& config);
 
   // Local bundle around a central shot
   static py::tuple BundleLocal(
       sfmmap::Map& map,
-      const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-      const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+      const sfmmap::Map::CameraMap&    camera_priors,
+      const sfmmap::Map::RigCameraMap& rig_camera_priors,
       const AlignedVector<sfmmap::GroundControlPoint>& gcp,
       const sfmmap::ShotId& central_shot_id,
       const py::dict& config);
@@ -44,8 +44,8 @@ class BAHelpers {
   static py::dict BundleShotPoses(
       sfmmap::Map& map,
       const std::unordered_set<sfmmap::ShotId>& shot_ids,
-      const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-      const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+      const sfmmap::Map::CameraMap&    camera_priors,
+      const sfmmap::Map::RigCameraMap& rig_camera_priors,
       const py::dict& config);
 
   // Copy BA state back to the map
@@ -90,10 +90,10 @@ class BAHelpers {
 
  private:
   // Internal helpers implemented in ba_helpers.cc
- static bool TriangulateGCP(
-     const sfmmap::GroundControlPoint& point,
-     const sfmmap::Map::ShotMap& shots,
-     Vec3d& coordinates);
+  static bool TriangulateGCP(
+      const sfmmap::GroundControlPoint& point,
+      const sfmmap::Map::ShotMap& shots,
+      Vec3d& coordinates);
 
   static void AlignmentConstraints(
       const sfmmap::Map& map,
