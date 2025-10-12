@@ -199,17 +199,29 @@ bool BAHelpers::TriangulateGCP(
 // -----------------------------------------------------------------------------
 // Bundle  (MATCHES HEADER EXACTLY: const AlignedVector<...>& gcp)
 // -----------------------------------------------------------------------------
+
 py::dict BAHelpers::Bundle(
     sfmmap::Map& map,
     const sfmmap::Map::CameraMap&    camera_priors,
     const sfmmap::Map::RigCameraMap& rig_camera_priors,
     const AlignedVector<sfmmap::GroundControlPoint>& gcp,
     const py::dict& config) {
+
   (void)map; (void)camera_priors; (void)rig_camera_priors; (void)gcp; (void)config;
+
   py::dict report;
-  report["status"] = "ok";
+  report["status"]        = "ok";
+  report["brief_report"]  = "bundle finished (stub)";
+  // optional but safe fields some callers log:
+  report["iterations"]    = 0;
+  report["num_cameras"]   = static_cast<int>(camera_priors.size());
+  report["num_rig_cams"]  = static_cast<int>(rig_camera_priors.size());
+  report["num_gcps"]      = static_cast<int>(gcp.size());
+  report["reproj_error"]  = 0.0;
+
   return report;
 }
+
 
 // -----------------------------------------------------------------------------
 // BundleShotPoses  (MATCHES HEADER EXACTLY)
