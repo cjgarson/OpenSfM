@@ -58,7 +58,7 @@ def _refresh_reprojection_errors_py(reconstruction: types.Reconstruction) -> Non
         Rcw = shot.pose.get_rotation_matrix().T  # world->cam is Rcw; pose stores cam->world, so transpose
         Cw = shot.pose.get_origin()
 
-        for track_id, obs in reconstruction.map.get_shot_observations(shot_id).items():
+        for track_id, obs in reconstruction.tracks_manager.get_shot_observations(shot_id).items():
             if track_id not in reconstruction.points:
                 continue
             lm = reconstruction.points[track_id]
