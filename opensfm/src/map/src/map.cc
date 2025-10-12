@@ -493,7 +493,7 @@ Map::GetShotObservations(const sfmmap::ShotId& shot_id) const {
     std::unordered_map<LandmarkId, Observation> result;
     const auto& shot = GetShot(shot_id);
     for (const auto& kv : shot.GetLandmarkObservations()) {
-        result[kv.first] = kv.second;
+        result[landmark->Id()] = kv.second;
     }
     return result;
 }
