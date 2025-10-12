@@ -916,80 +916,92 @@ class TrackTriangulator:
         os = np.array(os)
         bs = np.array(bs)
 
-        best_inliers = []
+        best_inliers: List[int] = []
         best_point = None
-        combinatiom_tried = set()
-        ransac_tries = 11  # 0.99 proba, 60% inliers
-        all_combinations = list(combinations(range(len(ids)), 2))
+        tried = set()
+        ransac_tries = 11  # ~0.99 prob. with ~60% inliers
+        all_pairs = list(combinations(range(len(ids)), 2))
 
-        thresholds = len(os) * [reproj_threshold]
-        for i in range(ransac_tries):
-            random_id = int(np.random.rand() * (len(all_combinations) - 1))
-            if random_id in combinatiom_tried:
+        for it in range(ransac_tries):
+            ridx = int(np.random.rand() * (len(all_pairs) - 1))
+            if ridx in tried:
                 continue
-
-            i, j = all_combinations[random_id]
-            combinatiom_tried.add(random_id)
+            i, j = all_pairs[ridx]
+            tried.add(ridx)
 
             os_t = np.array([os[i], os[j]])
             bs_t = np.array([bs[i], bs[j]])
 
-            valid_triangulation, X = pygeometry.triangulate_bearings_midpoint(
+            # thresholds MUST match number of rays used (here: 2)
+            thresholds_t = [reproj_threshold, reproj_threshold]
+
+            valid, X = pygeometry.triangulate_bearings_midpoint(
                 os_t,
                 bs_t,
-                thresholds,
+                thresholds_t,
                 np.radians(min_ray_angle_degrees),
                 np.radians(180.0 - min_ray_angle_degrees),
             )
+
+            if not valid:
+                continue  # do NOT refine invalid solutions
+
             X = pygeometry.point_refinement(os_t, bs_t, X, iterations)
 
-            if valid_triangulation:
-                reprojected_bs = X - os
-                reprojected_bs /= np.linalg.norm(reprojected_bs, axis=1)[:, np.newaxis]
-                inliers = np.nonzero(
-                    np.linalg.norm(reprojected_bs - bs, axis=1) < reproj_threshold
-                )[0].tolist()
+            reprojected_bs = X - os
+            reprojected_bs /= np.linalg.norm(reprojected_bs, axis=1)[:, np.newaxis]
+            inliers = np.nonzero(
+                np.linalg.norm(reprojected_bs - bs, axis=1) < reproj_threshold
+            )[0].tolist()
 
-                if len(inliers) > len(best_inliers):
-                    _, new_X = pygeometry.triangulate_bearings_midpoint(
-                        os[inliers],
-                        bs[inliers],
-                        len(inliers) * [reproj_threshold],
-                        np.radians(min_ray_angle_degrees),
-                        np.radians(180.0 - min_ray_angle_degrees),
-                    )
-                    new_X = pygeometry.point_refinement(
-                        os[inliers], bs[inliers], X, iterations
+            if len(inliers) > len(best_inliers):
+                # Re-triangulate from all inliers
+                thresholds_all = [reproj_threshold] * len(inliers)
+                valid_many, X_many = pygeometry.triangulate_bearings_midpoint(
+                    os[inliers],
+                    bs[inliers],
+                    thresholds_all,
+                    np.radians(min_ray_angle_degrees),
+                    np.radians(180.0 - min_ray_angle_degrees),
+                )
+                if valid_many:
+                    # refine starting from X_many (previously we refined the wrong X)
+                    X_many = pygeometry.point_refinement(
+                        os[inliers], bs[inliers], X_many, iterations
                     )
 
-                    reprojected_bs = new_X - os
-                    reprojected_bs /= np.linalg.norm(reprojected_bs, axis=1)[
-                        :, np.newaxis
-                    ]
+                    reprojected_bs_many = X_many - os
+                    reprojected_bs_many /= np.linalg.norm(reprojected_bs_many, axis=1)[:, np.newaxis]
                     ls_inliers = np.nonzero(
-                        np.linalg.norm(reprojected_bs - bs, axis=1) < reproj_threshold
-                    )[0]
+                        np.linalg.norm(reprojected_bs_many - bs, axis=1) < reproj_threshold
+                    )[0].tolist()
+
                     if len(ls_inliers) > len(inliers):
                         best_inliers = ls_inliers
-                        best_point = new_X.tolist()
+                        best_point = X_many.tolist()
                     else:
                         best_inliers = inliers
                         best_point = X.tolist()
+                else:
+                    best_inliers = inliers
+                    best_point = X.tolist()
 
-                    pout = 0.99
-                    inliers_ratio = float(len(best_inliers)) / len(ids)
-                    if inliers_ratio == 1.0:
-                        break
-                    optimal_iter = math.log(1.0 - pout) / math.log(
-                        1.0 - inliers_ratio * inliers_ratio
-                    )
-                    if optimal_iter <= i:
-                        break
+                # Early termination heuristic
+                pout = 0.99
+                inliers_ratio = float(len(best_inliers)) / len(ids)
+                if inliers_ratio == 1.0:
+                    break
+                optimal_iter = math.log(1.0 - pout) / math.log(
+                    1.0 - inliers_ratio * inliers_ratio
+                )
+                if optimal_iter <= it:
+                    break
 
-        if len(best_inliers) > 1:
+        if len(best_inliers) > 1 and best_point is not None:
             self.tracks_handler.store_track_coordinates(track, best_point)
-            for i in best_inliers:
-                self.tracks_handler.store_inliers_observation(track, ids[i])
+            for k in best_inliers:
+                self.tracks_handler.store_inliers_observation(track, ids[k])
+
 
     def triangulate(
         self,
