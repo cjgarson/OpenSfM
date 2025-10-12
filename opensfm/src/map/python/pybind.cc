@@ -164,23 +164,32 @@ PYBIND11_MODULE(pymap, m) {
   // -----------------------------------------------------------------------------
   // RigCamera (POD + pickle)  *** no (Pose, Id) ctor in this fork ***
   // -----------------------------------------------------------------------------
-  py::class_<sfmmap::RigCamera>(m, "RigCamera")
-      .def(py::init<>())
-      .def_readwrite("id",   &sfmmap::RigCamera::id)
-      .def_readwrite("pose", &sfmmap::RigCamera::pose)
-      .def(py::pickle(
-          [](const sfmmap::RigCamera &rc) {         // __getstate__
-            return py::make_tuple(rc.pose, rc.id);
-          },
-          [](py::tuple s) {                          // __setstate__
-            if (s.size() != 2) {
-              throw std::runtime_error("Invalid state for RigCamera: expected (pose, id)");
-            }
-            sfmmap::RigCamera rc;
-            rc.pose = s[0].cast<geometry::Pose>();
-            rc.id   = s[1].cast<sfmmap::RigCameraId>();
-            return rc;
-          }));
+py::class_<sfmmap::RigCamera>(m, "RigCamera")
+    .def(py::init<>())
+    // Factory-style ctor so Python can do RigCamera(Pose(), "id")
+    .def(py::init([](const geometry::Pose& pose, const sfmmap::RigCameraId& id) {
+      sfmmap::RigCamera rc;
+      rc.pose = pose;
+      rc.id   = id;
+      return rc;
+    }))
+    .def_readwrite("id",   &sfmmap::RigCamera::id)
+    .def_readwrite("pose", &sfmmap::RigCamera::pose)
+    .def(py::pickle(
+        // __getstate__
+        [](const sfmmap::RigCamera &rc) {
+          return py::make_tuple(rc.pose, rc.id);
+        },
+        // __setstate__
+        [](py::tuple s) {
+          if (s.size() != 2) {
+            throw std::runtime_error("Invalid state for RigCamera: expected (pose, id)");
+          }
+          sfmmap::RigCamera rc;
+          rc.pose = s[0].cast<geometry::Pose>();
+          rc.id   = s[1].cast<sfmmap::RigCameraId>();
+          return rc;
+        }));
 
   // -----------------------------------------------------------------------------
   // RigInstance
