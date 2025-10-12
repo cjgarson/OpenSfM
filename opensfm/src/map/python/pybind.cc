@@ -162,34 +162,28 @@ PYBIND11_MODULE(pymap, m) {
       .def_property("vertices", &sfmmap::ShotMesh::GetVertices, &sfmmap::ShotMesh::SetVertices);
 
   // -----------------------------------------------------------------------------
-  // RigCamera (POD + pickle)  *** no (Pose, Id) ctor in this fork ***
+  // RigCamera (POD + pickle) — expose factory ctor matching Python call
   // -----------------------------------------------------------------------------
-py::class_<sfmmap::RigCamera>(m, "RigCamera")
-    .def(py::init<>())
-    // Factory-style ctor so Python can do RigCamera(Pose(), "id")
-    .def(py::init([](const geometry::Pose& pose, const sfmmap::RigCameraId& id) {
-      sfmmap::RigCamera rc;
-      rc.pose = pose;
-      rc.id   = id;
-      return rc;
-    }))
-    .def_readwrite("id",   &sfmmap::RigCamera::id)
-    .def_readwrite("pose", &sfmmap::RigCamera::pose)
-    .def(py::pickle(
-        // __getstate__
-        [](const sfmmap::RigCamera &rc) {
-          return py::make_tuple(rc.pose, rc.id);
-        },
-        // __setstate__
-        [](py::tuple s) {
-          if (s.size() != 2) {
-            throw std::runtime_error("Invalid state for RigCamera: expected (pose, id)");
-          }
-          sfmmap::RigCamera rc;
-          rc.pose = s[0].cast<geometry::Pose>();
-          rc.id   = s[1].cast<sfmmap::RigCameraId>();
-          return rc;
-        }));
+  py::class_<sfmmap::RigCamera>(m, "RigCamera")
+      .def(py::init<>())
+      .def(py::init([](const geometry::Pose& pose, const sfmmap::RigCameraId& id) {
+        sfmmap::RigCamera rc; rc.pose = pose; rc.id = id; return rc;
+      }))
+      .def_readwrite("id",   &sfmmap::RigCamera::id)
+      .def_readwrite("pose", &sfmmap::RigCamera::pose)
+      .def(py::pickle(
+          [](const sfmmap::RigCamera &rc) {         // __getstate__
+            return py::make_tuple(rc.pose, rc.id);
+          },
+          [](py::tuple s) {                          // __setstate__
+            if (s.size() != 2) {
+              throw std::runtime_error("Invalid state for RigCamera: expected (pose, id)");
+            }
+            sfmmap::RigCamera rc;
+            rc.pose = s[0].cast<geometry::Pose>();
+            rc.id   = s[1].cast<sfmmap::RigCameraId>();
+            return rc;
+          }));
 
   // -----------------------------------------------------------------------------
   // RigInstance
@@ -332,13 +326,16 @@ py::class_<sfmmap::RigCamera>(m, "RigCamera")
       .def("items",
            [](sfmmap::PanoShotView &sv) {
              py::list out;
-             for (auto &kv : sv.GetShots()) out.append(py::make_tuple(kv.first, kv.second));
+             for (auto &kv : sv.GetShots())
+               out.append(py::make_tuple(kv.first,
+                         py::cast(kv.second, py::return_value_policy::reference)));
              return out;
            })
       .def("values",
            [](sfmmap::PanoShotView &sv) {
              py::list out;
-             for (auto &kv : sv.GetShots()) out.append(kv.second);
+             for (auto &kv : sv.GetShots())
+               out.append(py::cast(kv.second, py::return_value_policy::reference));
              return out;
            })
       .def("__iter__",
@@ -368,13 +365,16 @@ py::class_<sfmmap::RigCamera>(m, "RigCamera")
       .def("items",
            [](sfmmap::ShotView &sv) {
              py::list out;
-             for (auto &kv : sv.GetShots()) out.append(py::make_tuple(kv.first, kv.second));
+             for (auto &kv : sv.GetShots())
+               out.append(py::make_tuple(kv.first,
+                         py::cast(kv.second, py::return_value_policy::reference)));
              return out;
            })
       .def("values",
            [](sfmmap::ShotView &sv) {
              py::list out;
-             for (auto &kv : sv.GetShots()) out.append(kv.second);
+             for (auto &kv : sv.GetShots())
+               out.append(py::cast(kv.second, py::return_value_policy::reference));
              return out;
            })
       .def("__iter__",
@@ -404,13 +404,16 @@ py::class_<sfmmap::RigCamera>(m, "RigCamera")
       .def("items",
            [](sfmmap::LandmarkView &sv) {
              py::list out;
-             for (auto &kv : sv.GetLandmarks()) out.append(py::make_tuple(kv.first, kv.second));
+             for (auto &kv : sv.GetLandmarks())
+               out.append(py::make_tuple(kv.first,
+                         py::cast(kv.second, py::return_value_policy::reference)));
              return out;
            })
       .def("values",
            [](sfmmap::LandmarkView &sv) {
              py::list out;
-             for (auto &kv : sv.GetLandmarks()) out.append(kv.second);
+             for (auto &kv : sv.GetLandmarks())
+               out.append(py::cast(kv.second, py::return_value_policy::reference));
              return out;
            })
       .def("__iter__",
@@ -441,16 +444,19 @@ py::class_<sfmmap::RigCamera>(m, "RigCamera")
            [](sfmmap::CameraView &sv) {
              py::list out;
              for (const auto &kv : sv.GetCameras())
-               out.append(py::make_tuple(kv.first, &sv.GetCamera(kv.first)));
+               out.append(py::make_tuple(kv.first,
+                         py::cast(&sv.GetCamera(kv.first),
+                                  py::return_value_policy::reference)));
              return out;
            })
       .def("values",
            [](sfmmap::CameraView &sv) {
              py::list out;
              for (const auto &kv : sv.GetCameras())
-               out.append(&sv.GetCamera(kv.first));
+               out.append(py::cast(&sv.GetCamera(kv.first),
+                                   py::return_value_policy::reference));
              return out;
-           }, py::return_value_policy::reference_internal)
+           })
       .def("__iter__",
            [](const sfmmap::CameraView &sv) {
              const auto &cams = sv.GetCameras();
@@ -479,16 +485,19 @@ py::class_<sfmmap::RigCamera>(m, "RigCamera")
            [](sfmmap::BiasView &sv) {
              py::list out;
              for (const auto &kv : sv.GetBiases())
-               out.append(py::make_tuple(kv.first, &sv.GetBias(kv.first)));
+               out.append(py::make_tuple(kv.first,
+                         py::cast(&sv.GetBias(kv.first),
+                                  py::return_value_policy::reference)));
              return out;
            })
       .def("values",
            [](sfmmap::BiasView &sv) {
              py::list out;
              for (const auto &kv : sv.GetBiases())
-               out.append(&sv.GetBias(kv.first));
+               out.append(py::cast(&sv.GetBias(kv.first),
+                                   py::return_value_policy::reference));
              return out;
-           }, py::return_value_policy::reference_internal)
+           })
       .def("__iter__",
            [](const sfmmap::BiasView &sv) {
              const auto &biases = sv.GetBiases();
@@ -517,16 +526,19 @@ py::class_<sfmmap::RigCamera>(m, "RigCamera")
            [](sfmmap::RigCameraView &sv) {
              py::list out;
              for (const auto &kv : sv.GetRigCameras())
-               out.append(py::make_tuple(kv.first, &sv.GetRigCamera(kv.first)));
+               out.append(py::make_tuple(kv.first,
+                         py::cast(&sv.GetRigCamera(kv.first),
+                                  py::return_value_policy::reference)));
              return out;
            })
       .def("values",
            [](sfmmap::RigCameraView &sv) {
              py::list out;
              for (const auto &kv : sv.GetRigCameras())
-               out.append(&sv.GetRigCamera(kv.first));
+               out.append(py::cast(&sv.GetRigCamera(kv.first),
+                                   py::return_value_policy::reference));
              return out;
-           }, py::return_value_policy::reference_internal)
+           })
       .def("__iter__",
            [](const sfmmap::RigCameraView &sv) {
              const auto &cams = sv.GetRigCameras();
@@ -555,16 +567,19 @@ py::class_<sfmmap::RigCamera>(m, "RigCamera")
            [](sfmmap::RigInstanceView &sv) {
              py::list out;
              for (const auto &kv : sv.GetRigInstances())
-               out.append(py::make_tuple(kv.first, &sv.GetRigInstance(kv.first)));
+               out.append(py::make_tuple(kv.first,
+                         py::cast(&sv.GetRigInstance(kv.first),
+                                  py::return_value_policy::reference)));
              return out;
            })
       .def("values",
            [](sfmmap::RigInstanceView &sv) {
              py::list out;
              for (const auto &kv : sv.GetRigInstances())
-               out.append(&sv.GetRigInstance(kv.first));
+               out.append(py::cast(&sv.GetRigInstance(kv.first),
+                                   py::return_value_policy::reference));
              return out;
-           }, py::return_value_policy::reference_internal)
+           })
       .def("__iter__",
            [](const sfmmap::RigInstanceView &sv) {
              const auto &instances = sv.GetRigInstances();
