@@ -119,13 +119,14 @@ bool BAHelpers::TriangulateGCP(
 // Local bundle — shape the same report as Python expects
 //   Returns (list_of_point_ids, dict_with_brief_report)
 // -----------------------------------------------------------------------------
-std::pair<std::vector<std::string>, pybind11::dict>
-BAHelpers::BundleLocal(sfmmap::Map& map,
+py::tuple
+BAHelpers::BundleLocal(
+    sfmmap::Map& map,
     const sfmmap::Map::CameraMap& camera_priors,
     const sfmmap::Map::RigCameraMap& rig_camera_priors,
     const AlignedVector<sfmmap::GroundControlPoint>& gcp,
     const sfmmap::ShotId& central_shot_id,
-    const py::dict& config) {
+    const py::dict& config)
 
   // Construct a minimal report; keep keys stable
   py::dict report;
