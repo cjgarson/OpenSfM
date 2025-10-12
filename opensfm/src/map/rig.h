@@ -16,6 +16,7 @@ class Shot;
  * A rig camera with a fixed pose relative to its rig instance.
  */
 struct RigCamera {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   RigCameraId id;
   ::geometry::Pose pose;
 };
@@ -26,6 +27,7 @@ struct RigCamera {
  */
 class RigInstance {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   RigInstance() : id_(), pose_() {}
   explicit RigInstance(const RigInstanceId& rid) : id_(rid) {}
 
