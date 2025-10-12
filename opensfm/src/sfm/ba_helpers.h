@@ -1,4 +1,3 @@
-// src/sfm/ba_helpers.h
 #pragma once
 
 #include <bundle/bundle_adjuster.h>
@@ -8,7 +7,6 @@
 
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
 #include <string>
 
 namespace py = pybind11;
@@ -16,14 +14,12 @@ namespace py = pybind11;
 namespace sfm {
 
 /**
- * NOTE:
- *  - All map-related types are in namespace `sfmmap`.
- *  - This header matches the static-methods implemented in src/sfm/src/ba_helpers.cc.
- *  - Keep only BA-related helpers here (Bundle/BundleLocal/BundleShotPoses + utilities used by them).
+ * Safe-minimal BA helpers:
+ *  - Pose-only, conservative smoothing (optional)
+ *  - NO direct reprojection-error computation here (Python will refresh)
  */
 class BAHelpers {
  public:
-  // Global bundle (minimal, safe): compute reprojection errors, optional tiny pose-only smoothing
   static py::dict Bundle(
       sfmmap::Map& map,
       const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
@@ -31,7 +27,6 @@ class BAHelpers {
       const AlignedVector<sfmmap::GroundControlPoint>& gcp,
       const py::dict& config);
 
-  // Local bundle around a central shot (same contract as before)
   static py::tuple BundleLocal(
       sfmmap::Map& map,
       const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
@@ -40,7 +35,6 @@ class BAHelpers {
       const sfmmap::ShotId& central_shot_id,
       const py::dict& config);
 
-  // Bundle only poses (shots fixed set)
   static py::dict BundleShotPoses(
       sfmmap::Map& map,
       const std::unordered_set<sfmmap::ShotId>& shot_ids,
@@ -48,19 +42,12 @@ class BAHelpers {
       const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
       const py::dict& config);
 
-  // Copy BA state back to the map (kept as no-op to avoid segfault zones)
   static void BundleToMap(const bundle::BundleAdjuster& bundle_adjuster,
                           sfmmap::Map& output_map,
                           bool update_cameras);
 
  private:
-  // ---- Internal helpers (safe, no allocations across pybind map casters) ----
-
-  // Compute reprojection errors for all (or a subset of) shots, store them in landmarks
-  static void ComputeReprojectionErrors(sfmmap::Map& map,
-                                        const std::unordered_set<sfmmap::ShotId>* restrict_to = nullptr);
-
-  // A very small, conservative pose-only smoothing pass (optional, limited iters)
+  // Tiny, conservative pose “smoothing”. Doesn’t touch intrinsics or rigs.
   static void PoseOnlySmooth(sfmmap::Map& map,
                              const std::unordered_set<sfmmap::ShotId>* restrict_to,
                              int max_iterations);
