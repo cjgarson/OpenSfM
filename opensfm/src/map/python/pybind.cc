@@ -111,20 +111,33 @@ PYBIND11_MODULE(pymap, m) {
       .def("set", &sfmmap::ShotMeasurements::Set);
 
   // RigCamera (simple struct)
-  py::class_<sfmmap::RigCamera>(m, "RigCamera")
-      .def(py::init([](const geometry::Pose& pose, sfmmap::RigCameraId id) {
-        sfmmap::RigCamera rc; rc.pose = pose; rc.id = std::move(id); return rc;
-      }))
-      .def_readwrite("id",   &sfmmap::RigCamera::id)
-      .def_readwrite("pose", &sfmmap::RigCamera::pose)
-      .def(py::pickle(
-        [](const map::RigCamera &rc) {
+py::class_<sfmmap::RigCamera>(m, "RigCamera")
+    // Optional convenience ctor from (pose, id); keep if you want it
+    .def(py::init([](const geometry::Pose& pose, sfmmap::RigCameraId id) {
+      sfmmap::RigCamera rc;
+      rc.pose = pose;
+      rc.id   = std::move(id);
+      return rc;
+    }))
+    .def_readwrite("id",   &sfmmap::RigCamera::id)
+    .def_readwrite("pose", &sfmmap::RigCamera::pose)
+    .def(py::pickle(
+        // __getstate__
+        [](const sfmmap::RigCamera& rc) {
           return py::make_tuple(rc.pose, rc.id);
         },
+        // __setstate__
         [](py::tuple s) {
-          return map::RigCamera(s[0].cast<geometry::Pose>(),
-                                s[1].cast<map::RigCameraId>());
-        }));
+          if (s.size() != 2) {
+            throw std::runtime_error("Invalid state for RigCamera: expected (pose, id)");
+          }
+          sfmmap::RigCamera rc;
+          rc.pose = s[0].cast<geometry::Pose>();
+          rc.id   = s[1].cast<sfmmap::RigCameraId>();
+          return rc;
+        }
+    ));
+
 
 
   // RigInstance
