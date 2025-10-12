@@ -1,56 +1,103 @@
+// src/sfm/ba_helpers.h
 #pragma once
 
 #include <bundle/bundle_adjuster.h>
+#include <foundation/types.h>
 #include <map/ground_control_points.h>
 #include <map/map.h>
-#include <pybind11/pybind11.h>
 
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <string>
+#include <utility>
 
 namespace py = pybind11;
 
 namespace sfm {
 
 /**
- * Safe-minimal BA helpers:
- *  - Pose-only, conservative smoothing (optional)
- *  - NO direct reprojection-error computation here (Python will refresh)
+ * NOTE:
+ *  - Map-related types live under namespace `map`.
+ *  - This header matches implementations in src/sfm/src/ba_helpers.cc.
  */
 class BAHelpers {
  public:
+  // -------- Neighborhood helpers (IDs and pointers) ----------
+  static std::pair<std::unordered_set<map::ShotId>, std::unordered_set<map::ShotId>>
+  ShotNeighborhoodIds(map::Map& map,
+                      const map::ShotId& central_shot_id,
+                      size_t radius,
+                      size_t min_common_points,
+                      size_t max_interior_size);
+
+  static std::pair<std::unordered_set<map::Shot*>, std::unordered_set<map::Shot*>>
+  ShotNeighborhood(map::Map& map,
+                   const map::ShotId& central_shot_id,
+                   size_t radius,
+                   size_t min_common_points,
+                   size_t max_interior_size);
+
+  static std::unordered_set<map::Shot*> DirectShotNeighbors(
+      map::Map& map,
+      const std::unordered_set<map::Shot*>& shot_ids,
+      size_t min_common_points,
+      size_t max_neighbors);
+
+  // ---------------- Bundle entry points ----------------------
   static py::dict Bundle(
-      sfmmap::Map& map,
-      const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-      const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
-      const AlignedVector<sfmmap::GroundControlPoint>& gcp,
+      map::Map& map,
+      const std::unordered_map<map::CameraId, geometry::Camera>& camera_priors,
+      const std::unordered_map<map::RigCameraId, map::RigCamera>& rig_camera_priors,
+      const AlignedVector<map::GroundControlPoint>& gcp,
       const py::dict& config);
 
   static py::tuple BundleLocal(
-      sfmmap::Map& map,
-      const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-      const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
-      const AlignedVector<sfmmap::GroundControlPoint>& gcp,
-      const sfmmap::ShotId& central_shot_id,
+      map::Map& map,
+      const std::unordered_map<map::CameraId, geometry::Camera>& camera_priors,
+      const std::unordered_map<map::RigCameraId, map::RigCamera>& rig_camera_priors,
+      const AlignedVector<map::GroundControlPoint>& gcp,
+      const map::ShotId& central_shot_id,
       const py::dict& config);
 
   static py::dict BundleShotPoses(
-      sfmmap::Map& map,
-      const std::unordered_set<sfmmap::ShotId>& shot_ids,
-      const std::unordered_map<sfmmap::CameraId, geometry::Camera>& camera_priors,
-      const std::unordered_map<sfmmap::RigCameraId, sfmmap::RigCamera>& rig_camera_priors,
+      map::Map& map,
+      const std::unordered_set<map::ShotId>& shot_ids,
+      const std::unordered_map<map::CameraId, geometry::Camera>& camera_priors,
+      const std::unordered_map<map::RigCameraId, map::RigCamera>& rig_camera_priors,
       const py::dict& config);
 
   static void BundleToMap(const bundle::BundleAdjuster& bundle_adjuster,
-                          sfmmap::Map& output_map,
+                          map::Map& output_map,
                           bool update_cameras);
 
+  // ---------------- Alignment helpers ------------------------
+  static std::string DetectAlignmentConstraints(
+      const map::Map& map,
+      const py::dict& config,
+      const AlignedVector<map::GroundControlPoint>& gcp);
+
+  static void AlignmentConstraints(
+      const map::Map& map,
+      const py::dict& config,
+      const AlignedVector<map::GroundControlPoint>& gcp,
+      MatX3d& Xp,
+      MatX3d& X);
+
+  // ---------------- GCP helpers -------------------------------
+  static size_t AddGCPToBundle(
+      bundle::BundleAdjuster& ba,
+      const map::Map& map,
+      const AlignedVector<map::GroundControlPoint>& gcp,
+      const py::dict& config);
+
  private:
-  // Tiny, conservative pose “smoothing”. Doesn’t touch intrinsics or rigs.
-  static void PoseOnlySmooth(sfmmap::Map& map,
-                             const std::unordered_set<sfmmap::ShotId>* restrict_to,
-                             int max_iterations);
+  static bool TriangulateGCP(
+      const map::GroundControlPoint& point,
+      const std::unordered_map<map::ShotId, map::Shot>& shots,
+      Vec3d& coordinates);
 };
 
 }  // namespace sfm
