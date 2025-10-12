@@ -7,6 +7,8 @@
 #include <complex>
 #include <iostream>
 
+EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Matrix<double,3,4>)
+
 Eigen::Matrix3d RotationMatrixAroundAxis(const double cos_theta,
                                          const double sin_theta,
                                          const Eigen::Vector3d &v);
