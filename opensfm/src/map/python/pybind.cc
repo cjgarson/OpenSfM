@@ -117,10 +117,15 @@ PYBIND11_MODULE(pymap, m) {
       }))
       .def_readwrite("id",   &sfmmap::RigCamera::id)
       .def_readwrite("pose", &sfmmap::RigCamera::pose)
-          [](py::tuple s) {
-            return map::RigCamera(s[0].cast<geometry::Pose>(),
-                                  s[1].cast<map::RigCameraId>());
-          }));
+      .def(py::pickle(
+        [](const map::RigCamera &rc) {
+          return py::make_tuple(rc.pose, rc.id);
+        },
+        [](py::tuple s) {
+          return map::RigCamera(s[0].cast<geometry::Pose>(),
+                                s[1].cast<map::RigCameraId>());
+        }));
+
 
   // RigInstance
   py::class_<sfmmap::RigInstance>(m, "RigInstance")
