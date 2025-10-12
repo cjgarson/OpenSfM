@@ -1,6 +1,5 @@
 #pragma once
 
-// geometry / map includes
 #include <geo/geo.h>
 #include <geometry/camera.h>
 #include <geometry/pose.h>
@@ -12,11 +11,8 @@
 #include <map/shot.h>
 #include <map/tracks_manager.h>
 
-// Eigen
 #include <Eigen/Core>
 #include <Eigen/StdVector>
-
-// STL
 #include <map>
 #include <memory>
 #include <set>
@@ -37,7 +33,6 @@ class Map {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  // Containers that hold Eigen-using types by value MUST use aligned_allocator.
   using CameraMap = std::unordered_map<
       CameraId, ::geometry::Camera,
       std::hash<CameraId>, std::equal_to<CameraId>,
@@ -112,7 +107,10 @@ class Map {
   RigCamera&   CreateRigCamera(const RigCamera& rig_camera);
   RigInstance& CreateRigInstance(const RigInstanceId& instance_id);
   void         RemoveRigInstance(const RigInstanceId& instance_id);
-  RigInstance& UpdateRigInstance(const RigInstance& other_rig_instance);
+
+  // IMPORTANT: use aligned RigCameraMap here so pybind11 converts dict -> aligned map.
+  RigInstance& UpdateRigInstance(const RigInstance& other_rig_instance,
+                                 const RigCameraMap& rig_cameras);
 
   size_t            NumberOfRigCameras() const;
   RigCamera&        GetRigCamera(const RigCameraId& rig_camera_id);
@@ -182,11 +180,11 @@ class Map {
  private:
   void UpdateShotWithRig(const Shot& other_shot, bool is_panoshot = false);
 
-  CameraMap     cameras_;
-  BiasMap       bias_;
-  ShotMap       shots_;
-  ShotMap       pano_shots_;
-  LandmarkMap   landmarks_;
+  CameraMap      cameras_;
+  BiasMap        bias_;
+  ShotMap        shots_;
+  ShotMap        pano_shots_;
+  LandmarkMap    landmarks_;
   RigInstanceMap rig_instances_;
   RigCameraMap   rig_cameras_;
   geo::TopocentricConverter topo_conv_;
