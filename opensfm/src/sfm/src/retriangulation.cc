@@ -5,6 +5,7 @@
 
 #include <limits>
 #include <unordered_set>
+#include <Eigen/StdVector>
 
 namespace sfm {
 namespace retriangulation {
@@ -38,8 +39,16 @@ void RealignMaps(const sfmmap::Map& map_from, sfmmap::Map& map_to,
   const auto& to_ref   = map_to.GetTopocentricConverter();
   const Vec3d from_to_offset = to_ref.ToTopocentric(from_ref.GetLlaRef());
 
+  // Aligned container for Similarity (Eigen payload)
+  using SimilarityMap = std::unordered_map<
+      sfmmap::ShotId,
+      geometry::Similarity,
+      std::hash<sfmmap::ShotId>,
+      std::equal_to<sfmmap::ShotId>,
+      Eigen::aligned_allocator<std::pair<const sfmmap::ShotId, geometry::Similarity>>>;
+
   // record transforms that remap points of 'to' relative to 'from'
-  std::unordered_map<sfmmap::ShotId, geometry::Similarity> from_to_transforms;
+  SimilarityMap from_to_transforms;
   for (const auto& shot_to_pair : map_to.GetShots()) {
     const auto& shot_id = shot_to_pair.first;
     const auto& shot_to = shot_to_pair.second;
