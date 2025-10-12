@@ -67,12 +67,7 @@ def bundle(
         config,
     )
 
-    # Be robust to stubbed or minimal reports
-    brief = report.get("brief_report")
-    if brief is not None:
-        logger.debug(brief)
-    else:
-        logger.debug("bundle finished (stub)")
+    logger.debug(report["brief_report"])
     return report
 
 
@@ -111,11 +106,7 @@ def bundle_local(
         central_shot_id,
         config,
     )
-    brief = report.get("brief_report")
-    if brief is not None:
-        logger.debug(brief)
-    else:
-        logger.debug("local bundle finished (stub)")
+    logger.debug(report["brief_report"])
     return pt_ids, report
 
 
@@ -684,56 +675,84 @@ def resect(
     rig_assignments = rig.rig_assignments_per_image(data.load_rig_assignments())
     camera = reconstruction.cameras[data.load_exif(shot_id)["camera"]]
 
-    bs, Xs, ids = [], [], []
+    bs, Xs, ids, pts2d = [], [], [], []
     for track, obs in tracks_manager.get_shot_observations(shot_id).items():
         if track in reconstruction.points:
-            b = camera.pixel_bearing(obs.point)
+            # Collect both bearings and pixel points to allow PnP fallback
+            b = camera.pixel_bearing(np.array(obs.point))
             bs.append(b)
+            pts2d.append(obs.point)
             Xs.append(reconstruction.points[track].coordinates)
             ids.append(track)
-    bs = np.array(bs)
-    Xs = np.array(Xs)
+
+    bs = np.asarray(bs, dtype=float)
+    Xs = np.asarray(Xs, dtype=float)
+    pts2d = np.asarray(pts2d, dtype=float)
+
     if len(bs) < 5:
         return False, set(), {"num_common_points": len(bs)}
 
-    T = multiview.absolute_pose_ransac(bs, Xs, threshold, 1000, 0.999)
+    # ---- Robust absolute pose with OpenCV solvePnPRansac (avoids Eigen crash) ----
+    # Convert bearing-based threshold to pixel threshold using focal length
+    K = camera.get_K()
+    fx = float(K[0, 0])
+    reproj_err_px = max(1.0, float(threshold) * fx)
 
-    R = T[:, :3]
-    t = T[:, 3]
+    # OpenCV expects (N,1,3) and (N,1,2) or flattened (N,3)/(N,2)
+    # Use EPNP inside RANSAC; high iters and confidence like before
+    ok, rvec, tvec, inlier_idx = cv2.solvePnPRansac(
+        Xs,
+        pts2d,
+        K,
+        None,
+        iterationsCount=1000,
+        reprojectionError=reproj_err_px,
+        confidence=0.999,
+        flags=cv2.SOLVEPNP_EPNP,
+    )
+    if not ok or inlier_idx is None or len(inlier_idx) == 0:
+        return False, set(), {"num_common_points": int(len(bs)), "num_inliers": 0}
 
-    reprojected_bs = R.T.dot((Xs - t).T).T
+    # Convert to R, t in our convention
+    R_cv, _ = cv2.Rodrigues(rvec)
+    t_cv = tvec.reshape(3)
+
+    # Recompute bearing-domain inliers to preserve original logic/thresholding
+    reprojected_bs = R_cv.T.dot((Xs - t_cv).T).T
     reprojected_bs /= np.linalg.norm(reprojected_bs, axis=1)[:, np.newaxis]
-
-    inliers = np.linalg.norm(reprojected_bs - bs, axis=1) < threshold
-    ninliers = int(sum(inliers))
+    inliers_mask = np.linalg.norm(reprojected_bs - bs, axis=1) < threshold
+    ninliers = int(np.count_nonzero(inliers_mask))
 
     logger.info("{} resection inliers: {} / {}".format(shot_id, ninliers, len(bs)))
     report: Dict[str, Any] = {
-        "num_common_points": len(bs),
+        "num_common_points": int(len(bs)),
         "num_inliers": ninliers,
     }
-    if ninliers >= min_inliers:
-        R = T[:, :3].T
-        t = -R.dot(T[:, 3])
-        assert shot_id not in reconstruction.shots
 
-        new_shots = add_shot(
-            data, reconstruction, rig_assignments, shot_id, pygeometry.Pose(R, t)
-        )
-
-        if shot_id in rig_assignments:
-            triangulate_shot_features(
-                tracks_manager, reconstruction, new_shots, data.config
-            )
-        for i, succeed in enumerate(inliers):
-            if succeed:
-                add_observation_to_reconstruction(
-                    tracks_manager, reconstruction, shot_id, ids[i]
-                )
-        report["shots"] = list(new_shots)
-        return True, new_shots, report
-    else:
+    if ninliers < min_inliers:
         return False, set(), report
+
+    # Convert to map convention (camera/world as used by the rest of the code)
+    R = R_cv.T
+    t = -R.dot(t_cv)
+
+    assert shot_id not in reconstruction.shots
+
+    new_shots = add_shot(
+        data, reconstruction, rig_assignments, shot_id, pygeometry.Pose(R, t)
+    )
+
+    if shot_id in rig_assignments:
+        triangulate_shot_features(tracks_manager, reconstruction, new_shots, data.config)
+
+    # Add only inlier observations
+    inlier_ids = [ids[i] for i, ok_ in enumerate(inliers_mask) if ok_]
+    for tid in inlier_ids:
+        add_observation_to_reconstruction(tracks_manager, reconstruction, shot_id, tid)
+
+    report["shots"] = list(new_shots)
+    return True, new_shots, report
+# -------------------- end patched resect --------------------
 
 
 def corresponding_tracks(
@@ -865,6 +884,33 @@ class TrackHandlerTrackManager(TrackHandlerBase):
         observation = self.tracks_manager.get_observation(shot_id, track_id)
         self.reconstruction.add_observation(shot_id, track_id, observation)
 
+
+class TrackTriangulator:
+    """Triangulate tracks in a reconstruction.
+
+    Caches shot origin and rotation matrix
+    """
+
+    # for getting shots
+    reconstruction: types.Reconstruction
+
+    # for storing tracks inliers
+    tracks_handler: TrackHandlerBase
+
+    # caches
+    origins: Dict[str, np.ndarray] = {}
+    rotation_inverses: Dict[str, np.ndarray] = {}
+    Rts: Dict[str, np.ndarray] = {}
+
+    def __init__(
+        self, reconstruction: types.Reconstruction, tracks_handler: TrackHandlerBase
+    ) -> None:
+        """Build a triangulator for a specific reconstruction."""
+        self.reconstruction = reconstruction
+        self.tracks_handler = tracks_handler
+        self.origins = {}
+        self.rotation_inverses = {}
+        self.Rts = {}
 
 class TrackTriangulator:
     """Triangulate tracks in a reconstruction.
