@@ -6,6 +6,7 @@
 namespace geometry {
 class Similarity {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   Similarity() = default;
   Similarity(const Vec3d& R, const Vec3d& t, double s) : Rt_(R, t), scale_(s) {}
   Similarity(const Mat3d& R, const Vec3d& t, double s) : Rt_(R, t), scale_(s) {}
