@@ -140,13 +140,13 @@ bool FivePointsGaussJordan(Eigen::MatrixXd *Mp) {
 }
 
 namespace geometry {
-std::vector<Eigen::Matrix<double, 3, 3>> EssentialFivePoints(
+AlignedVector<Eigen::Matrix<double, 3, 3>> EssentialFivePoints(
     const Eigen::Matrix<double, -1, 3> &x1,
     const Eigen::Matrix<double, -1, 3> &x2) {
   if ((x1.cols() != x2.cols()) || (x1.rows() != x2.rows())) {
     throw std::runtime_error("Features matrices have different sizes.");
   }
-  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples(x1.rows());
+  AlignedVector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples(x1.rows());
   for (int i = 0; i < x1.rows(); ++i) {
     samples[i].first = x1.row(i);
     samples[i].second = x2.row(i);
@@ -154,13 +154,13 @@ std::vector<Eigen::Matrix<double, 3, 3>> EssentialFivePoints(
   return ::EssentialFivePoints(samples.begin(), samples.end());
 }
 
-std::vector<Eigen::Matrix<double, 3, 3>> EssentialNPoints(
+AlignedVector<Eigen::Matrix<double, 3, 3>> EssentialNPoints(
     const Eigen::Matrix<double, -1, 3> &x1,
     const Eigen::Matrix<double, -1, 3> &x2) {
   if ((x1.cols() != x2.cols()) || (x1.rows() != x2.rows())) {
     throw std::runtime_error("Features matrices have different sizes.");
   }
-  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples(x1.rows());
+  AlignedVector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples(x1.rows());
   for (int i = 0; i < x1.rows(); ++i) {
     samples[i].first = x1.row(i);
     samples[i].second = x2.row(i);
