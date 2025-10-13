@@ -8,7 +8,7 @@ Eigen::Matrix<double, 3, 4> RelativePoseFromEssential(
   if ((x1.cols() != x2.cols()) || (x1.rows() != x2.rows())) {
     throw std::runtime_error("Features matrices have different sizes.");
   }
-  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples(x1.rows());
+  AlignedVector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples(x1.rows());
   for (int i = 0; i < x1.rows(); ++i) {
     samples[i].first = x1.row(i);
     samples[i].second = x2.row(i);
@@ -22,7 +22,7 @@ Eigen::Matrix3d RelativeRotationNPoints(
   if ((x1.cols() != x2.cols()) || (x1.rows() != x2.rows())) {
     throw std::runtime_error("Features matrices have different sizes.");
   }
-  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples(x1.rows());
+  AlignedVector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples(x1.rows());
   for (int i = 0; i < x1.rows(); ++i) {
     samples[i].first = x1.row(i);
     samples[i].second = x2.row(i);
@@ -37,7 +37,7 @@ Eigen::Matrix<double, 3, 4> RelativePoseRefinement(
   if ((x1.cols() != x2.cols()) || (x1.rows() != x2.rows())) {
     throw std::runtime_error("Features matrices have different sizes.");
   }
-  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples(x1.rows());
+  AlignedVector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples(x1.rows());
   for (int i = 0; i < x1.rows(); ++i) {
     samples[i].first = x1.row(i).normalized();
     samples[i].second = x2.row(i).normalized();
