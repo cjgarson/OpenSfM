@@ -2,25 +2,27 @@
 
 #include <foundation/numeric.h>
 #include <geometry/transform.h>
+#include <foundation/types.h>   // <-- for AlignedVector, Mat34d, Vec3d, etc.
 
 #include <Eigen/Eigen>
+#include <array>
 #include <complex>
 #include <iostream>
 
-EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Matrix<double,3,4>)
+// NOTE:
+// - Do NOT use EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION here.
+// - We return AlignedVector<Mat34d> for 3x4 matrices to guarantee proper alignment.
 
 Eigen::Matrix3d RotationMatrixAroundAxis(const double cos_theta,
                                          const double sin_theta,
                                          const Eigen::Vector3d &v);
 
 // Implements "An Efficient Algebraic Solution to the
-// Perspective-Three-Point Problem" from Ke and al.
+// Perspective-Three-Point Problem" from Ke et al.
 template <class IT>
-std::vector<Eigen::Matrix<double, 3, 4>> AbsolutePoseThreePoints(IT begin,
-                                                                 IT end) {
-std::vector<Eigen::Matrix<double, 3, 4>,
-            Eigen::aligned_allocator<Eigen::Matrix<double, 3, 4>>> RTs;
-RTs.reserve(6);
+AlignedVector<Mat34d> AbsolutePoseThreePoints(IT begin, IT end) {
+  AlignedVector<Mat34d> RTs;
+  RTs.reserve(6);
 
   const Eigen::Vector3d b1 = begin->first;
   const Eigen::Vector3d b2 = (begin + 1)->first;
@@ -72,7 +74,7 @@ RTs.reserve(6);
   const auto g6 = f11 * f25 - f15 * f21;
   const auto g7 = -f15 * f24;
 
-  // Solve for cost(theta) by expressing the determinant^2 of (37)
+  // Solve for cos(theta) by expressing the determinant^2 of (37)
   const auto alpha4 = SQUARE(g5) + SQUARE(g1) + SQUARE(g3);
   const auto alpha3 = 2.0 * (g5 * g6 + g1 * g2 + g3 * g4);
   const auto alpha2 = SQUARE(g6) + 2.0 * g5 * g7 + SQUARE(g2) + SQUARE(g4) -
@@ -97,7 +99,6 @@ RTs.reserve(6);
   e1 << 1, 0, 0;
   e2 << 0, 1, 0;
 
-  constexpr double eps = 1e-20;
   for (const auto &root : roots) {
     const auto cos_theta_1 = root;
     const auto sin_theta_1 =
@@ -119,7 +120,7 @@ RTs.reserve(6);
         p3 - (sigma * sin_theta_1) / k3_b3 * (rotation * b3);
 
     // Rcamera and Tcamera parametrization
-    Eigen::Matrix<double, 3, 4> RT;
+    Mat34d RT;
     RT.block<3, 3>(0, 0) = rotation.transpose();
     RT.block<3, 1>(0, 3) = -rotation.transpose() * translation;
     RTs.push_back(RT);
@@ -145,12 +146,11 @@ Eigen::Vector3d TranslationBetweenPoints(IT begin, IT end,
   return (identity - F1).inverse() * F2;
 }
 
-// Implements "Fast and Globally Convergent Pose
-// Estimation from Video Images" from Lu and al.
+// Implements "Fast and Globally Convergent Pose Estimation from Video Images"
+// from Lu et al.
 template <class IT>
-Eigen::Matrix<double, 3, 4> AbsolutePoseNPoints(IT begin, IT end) {
-  // Initialize by compute s, R and t using Horn's method between rays and
-  // points
+Mat34d AbsolutePoseNPoints(IT begin, IT end) {
+  // Initialize by computing s, R and t using Horn's method between rays and points
   const auto averages = ComputeAverage(begin, end);
   double s_num = 0., s_denum = 0.;
   for (IT it = begin; it != end; ++it) {
@@ -168,25 +168,26 @@ Eigen::Matrix<double, 3, 4> AbsolutePoseNPoints(IT begin, IT end) {
   const int max_iterations = 100;
   for (int i = 0; i < max_iterations; ++i) {
     std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> current_points;
+    current_points.reserve(static_cast<size_t>(end - begin));
     for (IT it = begin; it != end; ++it) {
       const auto v = it->first;
       const Eigen::Matrix3d F = (v * v.transpose()) / (v.dot(v));
       const auto p = it->second;
       const auto q = F * (rotation * p + translation);
-      current_points.push_back(std::make_pair(q, p));
+      current_points.emplace_back(q, p);
     }
-    rotation =
-        RotationBetweenPoints(current_points.begin(), current_points.end());
+    rotation = RotationBetweenPoints(current_points.begin(), current_points.end());
     const auto new_translation = TranslationBetweenPoints(begin, end, rotation);
     const auto rel_delta =
-        (new_translation - translation).norm() / translation.norm();
+        (new_translation - translation).norm() / std::max(1e-12, translation.norm());
     if (rel_delta < tolerance) {
       break;
     }
     translation = new_translation;
   }
+
   // Rcamera and Tcamera parametrization
-  Eigen::Matrix<double, 3, 4> RT;
+  Mat34d RT;
   RT.block<3, 3>(0, 0) = rotation;
   RT.block<3, 1>(0, 3) = translation;
   return RT;
@@ -198,15 +199,18 @@ Eigen::Vector3d AbsolutePoseNPointsKnownRotation(IT begin, IT end) {
 }
 
 namespace geometry {
-std::vector<Eigen::Matrix<double, 3, 4>> AbsolutePoseThreePoints(
+
+// Aligned return types to avoid allocator mismatch/ODR issues.
+AlignedVector<Mat34d> AbsolutePoseThreePoints(
     const Eigen::Matrix<double, -1, 3> &bearings,
     const Eigen::Matrix<double, -1, 3> &points);
 
-Eigen::Matrix<double, 3, 4> AbsolutePoseNPoints(
+Mat34d AbsolutePoseNPoints(
     const Eigen::Matrix<double, -1, 3> &bearings,
     const Eigen::Matrix<double, -1, 3> &points);
 
 Eigen::Vector3d AbsolutePoseNPointsKnownRotation(
     const Eigen::Matrix<double, -1, 3> &bearings,
     const Eigen::Matrix<double, -1, 3> &points);
+
 }  // namespace geometry
