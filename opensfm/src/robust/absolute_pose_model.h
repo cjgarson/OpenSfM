@@ -6,6 +6,7 @@
 
 class AbsolutePose : public Model<AbsolutePose, 1, 4> {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   using Error = typename Model<AbsolutePose, 1, 4>::Error;
   using Type = Eigen::Matrix<double, 3, 4>;
   using Data = std::pair<Eigen::Vector3d, Eigen::Vector3d>;
