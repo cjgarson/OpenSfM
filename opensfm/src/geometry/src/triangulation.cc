@@ -17,7 +17,7 @@ double AngleBetweenVectors(const Eigen::Vector3d &u, const Eigen::Vector3d &v) {
 
 Eigen::Vector4d TriangulateBearingsDLTSolve(
     const Eigen::Matrix<double, Eigen::Dynamic, 3> &bearings,
-    const std::vector<Eigen::Matrix<double, 3, 4>> &Rts) {
+    const AlignedVector<Eigen::Matrix<double, 3, 4>> &Rts) {
   const int nviews = bearings.rows();
   assert(nviews == Rts.size());
 
@@ -42,7 +42,7 @@ Eigen::Vector4d TriangulateBearingsDLTSolve(
 namespace geometry {
 
 std::pair<bool, Eigen::Vector3d> TriangulateBearingsDLT(
-    const std::vector<Eigen::Matrix<double, 3, 4>> &Rts,
+    const AlignedVector<Eigen::Matrix<double, 3, 4>> &Rts,
     const Eigen::Matrix<double, Eigen::Dynamic, 3> &bearings, double threshold,
     double min_angle) {
   const int count = Rts.size();
