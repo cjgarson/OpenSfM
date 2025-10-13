@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Eigen/Eigen>
+#include <vector>
+#include <array>
 
 EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Vector3d)
 EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Matrix3d)
