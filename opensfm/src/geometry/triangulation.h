@@ -10,6 +10,8 @@
 #include <iostream>
 #include <string>
 
+EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Matrix<double,3,4>)
+
 double AngleBetweenVectors(const Eigen::Vector3d &u, const Eigen::Vector3d &v);
 
 Eigen::Vector4d TriangulateBearingsDLTSolve(
