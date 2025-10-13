@@ -6,6 +6,7 @@
 
 class RelativeRotation : public Model<RelativeRotation, 1, 1> {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   using Error = typename Model<RelativeRotation, 1, 1>::Error;
   using Type = Eigen::Matrix3d;
   using Data = std::pair<Eigen::Vector3d, Eigen::Vector3d>;
