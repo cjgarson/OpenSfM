@@ -255,10 +255,10 @@ class OpenSfMConfig:
     # Optimize internal camera parameters during bundle
     optimize_camera_parameters: bool = True
     # Maximum optimizer iterations.
-    bundle_max_iterations: int = 100
+    bundle_max_iterations: int = 50
 
     # Retriangulate all points from time to time
-    retriangulation: bool = True
+    retriangulation: bool = False
     # Retriangulate when the number of points grows by this ratio
     retriangulation_ratio: float = 1.2
     # Use analytic derivatives or auto-differentiated ones during bundle adjustment
