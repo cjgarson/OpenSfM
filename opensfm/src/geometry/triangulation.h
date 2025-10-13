@@ -16,7 +16,7 @@ double AngleBetweenVectors(const Eigen::Vector3d &u, const Eigen::Vector3d &v);
 
 Eigen::Vector4d TriangulateBearingsDLTSolve(
     const Eigen::Matrix<double, Eigen::Dynamic, 3> &bs,
-    const std::vector<Eigen::Matrix<double, 3, 4>> &Rts);
+    const AlignedVector<Eigen::Matrix<double, 3, 4>> &Rts);
 
 // Point minimizing the squared distance to all rays
 // Closed for solution from
@@ -52,7 +52,7 @@ Eigen::Matrix<T, 3, 1> TriangulateBearingsMidpointSolve(
 namespace geometry {
 
 std::pair<bool, Eigen::Vector3d> TriangulateBearingsDLT(
-    const std::vector<Eigen::Matrix<double, 3, 4>> &Rts,
+    const AlignedVector<Eigen::Matrix<double, 3, 4>> &Rts,
     const Eigen::Matrix<double, Eigen::Dynamic, 3> &bearings, double threshold,
     double min_angle);
 
