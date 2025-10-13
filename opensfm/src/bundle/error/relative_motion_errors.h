@@ -11,6 +11,7 @@
 namespace bundle {
 
 struct RelativeMotionError {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   RelativeMotionError(const Eigen::VectorXd& observed_Rts,
                       const Eigen::MatrixXd& scale_matrix, bool observed_scale)
       : observed_Rts_(observed_Rts),
@@ -66,6 +67,7 @@ struct RelativeMotionError {
 };
 
 struct RelativeRotationError {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   RelativeRotationError(const Vec3d& Rij, const Eigen::Matrix3d& scale_matrix)
       : Rij_(Rij), scale_matrix_(scale_matrix) {}
 
@@ -95,6 +97,7 @@ struct RelativeRotationError {
 };
 
 struct CommonPositionError {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   CommonPositionError(double margin, double std_deviation)
       : margin_(margin), scale_(1.0 / std_deviation) {}
 
