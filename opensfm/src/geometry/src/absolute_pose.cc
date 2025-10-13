@@ -1,4 +1,10 @@
+// geometry/src/absolute_pose.cc
 #include <geometry/absolute_pose.h>
+#include <foundation/types.h>
+
+#include <vector>
+#include <utility>
+#include <algorithm>
 
 Eigen::Matrix3d RotationMatrixAroundAxis(const double cos_theta,
                                          const double sin_theta,
@@ -18,39 +24,46 @@ Eigen::Matrix3d RotationMatrixAroundAxis(const double cos_theta,
 }
 
 namespace geometry {
-std::vector<Eigen::Matrix<double, 3, 4>> AbsolutePoseThreePoints(
+
+AlignedVector<Mat34d> AbsolutePoseThreePoints(
     const Eigen::Matrix<double, -1, 3> &bearings,
     const Eigen::Matrix<double, -1, 3> &points) {
-  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples(
-      bearings.rows());
-  for (int i = 0; i < bearings.rows(); ++i) {
-    samples[i].first = bearings.row(i).normalized();
-    samples[i].second = points.row(i);
+  // Pack inputs as (bearing, point) pairs for the templated solver.
+  const auto n = std::min<Eigen::Index>(bearings.rows(), points.rows());
+  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples;
+  samples.reserve(static_cast<size_t>(n));
+  for (Eigen::Index i = 0; i < n; ++i) {
+    samples.emplace_back(bearings.row(i).normalized(), points.row(i));
   }
+
+  // Templated implementation returns AlignedVector<Mat34d>
   return ::AbsolutePoseThreePoints(samples.begin(), samples.end());
 }
 
-Eigen::Matrix<double, 3, 4> AbsolutePoseNPoints(
+Mat34d AbsolutePoseNPoints(
     const Eigen::Matrix<double, -1, 3> &bearings,
     const Eigen::Matrix<double, -1, 3> &points) {
-  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples(
-      bearings.rows());
-  for (int i = 0; i < bearings.rows(); ++i) {
-    samples[i].first = bearings.row(i).normalized();
-    samples[i].second = points.row(i);
+  const auto n = std::min<Eigen::Index>(bearings.rows(), points.rows());
+  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples;
+  samples.reserve(static_cast<size_t>(n));
+  for (Eigen::Index i = 0; i < n; ++i) {
+    samples.emplace_back(bearings.row(i).normalized(), points.row(i));
   }
+
   return ::AbsolutePoseNPoints(samples.begin(), samples.end());
 }
 
 Eigen::Vector3d AbsolutePoseNPointsKnownRotation(
     const Eigen::Matrix<double, -1, 3> &bearings,
     const Eigen::Matrix<double, -1, 3> &points) {
-  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples(
-      bearings.rows());
-  for (int i = 0; i < bearings.rows(); ++i) {
-    samples[i].first = bearings.row(i).normalized();
-    samples[i].second = points.row(i);
+  const auto n = std::min<Eigen::Index>(bearings.rows(), points.rows());
+  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples;
+  samples.reserve(static_cast<size_t>(n));
+  for (Eigen::Index i = 0; i < n; ++i) {
+    samples.emplace_back(bearings.row(i).normalized(), points.row(i));
   }
+
   return ::AbsolutePoseNPointsKnownRotation(samples.begin(), samples.end());
 }
+
 }  // namespace geometry
