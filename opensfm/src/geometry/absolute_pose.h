@@ -167,7 +167,7 @@ Mat34d AbsolutePoseNPoints(IT begin, IT end) {
   const double tolerance = 1e-7;
   const int max_iterations = 100;
   for (int i = 0; i < max_iterations; ++i) {
-    std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> current_points;
+    AlignedVector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> current_points;
     current_points.reserve(static_cast<size_t>(end - begin));
     for (IT it = begin; it != end; ++it) {
       const auto v = it->first;
