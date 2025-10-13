@@ -8,6 +8,7 @@
 namespace bundle {
 
 struct Similarity : public Data<geometry::Similarity> {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   enum Parameter { RX, RY, RZ, TX, TY, TZ, SCALE, NUM_PARAMS };
 
   Similarity(const std::string &id, const geometry::Similarity &value)
@@ -33,6 +34,7 @@ struct Similarity : public Data<geometry::Similarity> {
 struct SimilarityPriorTransform
     : public geometry::Functor<Pose::NUM_PARAMS, Similarity::NUM_PARAMS,
                                Pose::NUM_PARAMS> {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   template <typename T>
   VecN<T, Pose::NUM_PARAMS> operator()(T const *parameters,
                                        T const *data) const {
