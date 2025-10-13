@@ -98,7 +98,7 @@ Eigen::MatrixXd FivePointsPolynomialConstraints(const Eigen::MatrixXd &E_basis);
 bool FivePointsGaussJordan(Eigen::MatrixXd *Mp);
 
 template <class IT>
-std::vector<Eigen::Matrix<double, 3, 3>> EssentialFivePoints(IT begin, IT end) {
+AlignedVector<Eigen::Matrix<double, 3, 3>> EssentialFivePoints(IT begin, IT end) {
   // Step 1: Nullspace exrtraction.
   Eigen::MatrixXd E_basis = FivePointsNullspaceBasis(begin, end);
 
@@ -107,7 +107,7 @@ std::vector<Eigen::Matrix<double, 3, 3>> EssentialFivePoints(IT begin, IT end) {
 
   // Step 3: Gauss-Jordan elimination.
   if (!FivePointsGaussJordan(&M)) {
-    return std::vector<Eigen::Matrix<double, 3, 3>>();
+    return AlignedVector<Eigen::Matrix<double, 3, 3>>();
   }
 
   // For the next steps, follow the matlab code given in Stewenius et al [1].
@@ -140,7 +140,7 @@ std::vector<Eigen::Matrix<double, 3, 3>> EssentialFivePoints(IT begin, IT end) {
   Matc Evec = E_basis * solutions;
 
   // Build the essential matrices for the real solutions.
-  std::vector<Eigen::Matrix<double, 3, 3>> Es;
+  AlignedVector<Eigen::Matrix<double, 3, 3>> Es;
   Es.reserve(10);
   for (int s = 0; s < 10; ++s) {
     Evec.col(s) /= Evec.col(s).norm();
@@ -165,14 +165,14 @@ std::vector<Eigen::Matrix<double, 3, 3>> EssentialFivePoints(IT begin, IT end) {
 }
 
 template <class IT>
-std::vector<Eigen::Matrix<double, 3, 3>> EssentialNPoints(IT begin, IT end) {
+AlignedVector<Eigen::Matrix<double, 3, 3>> EssentialNPoints(IT begin, IT end) {
   const int count = end - begin;
   Eigen::MatrixXd A(count, 9);
   A.setZero();
   EncodeEpipolarEquation(begin, end, &A);
 
   Eigen::VectorXd solution;
-  std::vector<Eigen::Matrix<double, 3, 3>> Es;
+  AlignedVector<Eigen::Matrix<double, 3, 3>> Es;
   if (foundation::SolveAX0(A, &solution)) {
     Eigen::Matrix3d E =
         Eigen::Map<Eigen::Matrix3d>(solution.data()).transpose();
@@ -193,11 +193,11 @@ std::vector<Eigen::Matrix<double, 3, 3>> EssentialNPoints(IT begin, IT end) {
 }
 
 namespace geometry {
-std::vector<Eigen::Matrix<double, 3, 3>> EssentialFivePoints(
+AlignedVector<Eigen::Matrix<double, 3, 3>> EssentialFivePoints(
     const Eigen::Matrix<double, -1, 3> &x1,
     const Eigen::Matrix<double, -1, 3> &x2);
 
-std::vector<Eigen::Matrix<double, 3, 3>> EssentialNPoints(
+AlignedVector<Eigen::Matrix<double, 3, 3>> EssentialNPoints(
     const Eigen::Matrix<double, -1, 3> &x1,
     const Eigen::Matrix<double, -1, 3> &x2);
 }  // namespace geometry
