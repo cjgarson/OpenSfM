@@ -35,6 +35,7 @@ enum {
 };
 
 struct RAShot {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   std::string id;
   double parameters[RA_SHOT_NUM_PARAMS];
   bool constant;
@@ -54,6 +55,7 @@ struct RAShot {
 };
 
 struct RAReconstruction {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   std::string id;
   double parameters[RA_RECONSTRUCTION_NUM_PARAMS];
   bool constant;
@@ -574,8 +576,14 @@ class ReconstructionAlignment {
   std::string FullReport() { return last_run_summary_.FullReport(); }
 
  private:
-  std::map<std::string, RAReconstruction> reconstructions_;
-  std::map<std::string, RAShot> shots_;
+  using RARecNode = std::pair<const std::string, RAReconstruction>;
+  using RAShotNode = std::pair<const std::string, RAShot>;
+  
+  std::map<std::string, RAReconstruction, std::less<std::string>,
+           Eigen::aligned_allocator<RARecNode>> reconstructions_;
+  
+  std::map<std::string, RAShot, std::less<std::string>,
+           Eigen::aligned_allocator<RAShotNode>> shots_;
   std::vector<RARelativeMotionConstraint> relative_motions_;
   std::vector<RAAbsolutePositionConstraint> absolute_positions_;
   std::vector<RARelativeAbsolutePositionConstraint>
