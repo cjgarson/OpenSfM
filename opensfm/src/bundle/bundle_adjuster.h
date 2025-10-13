@@ -314,18 +314,18 @@ class BundleAdjuster {
   // minimization constraints
 
   // reprojection observation
-  std::vector<PointProjectionObservation, Eigen::aligned_allocator<PointProjectionObservation>>
+  AlignedVector<PointProjectionObservation, Eigen::aligned_allocator<PointProjectionObservation>>
       point_projection_observations_;
   std::map<std::string, std::shared_ptr<HeatmapInterpolator>> heatmaps_;
 
   // relative motion between shots
-  std::vector<RelativeMotion,   Eigen::aligned_allocator<RelativeMotion>>   relative_motions_;
-  std::vector<RelativeRotation, Eigen::aligned_allocator<RelativeRotation>> relative_rotations_;
+  AlignedVector<RelativeMotion,   Eigen::aligned_allocator<RelativeMotion>>   relative_motions_;
+  AlignedVector<RelativeRotation, Eigen::aligned_allocator<RelativeRotation>> relative_rotations_;
   std::vector<CommonPosition> common_positions_;
 
   // shots absolute positions
   std::vector<AbsolutePositionHeatmap> absolute_positions_heatmaps_;
-  std::vector<AbsoluteUpVector, Eigen::aligned_allocator<AbsoluteUpVector>> absolute_up_vectors_;
+  AlignedVector<AbsoluteUpVector, Eigen::aligned_allocator<AbsoluteUpVector>> absolute_up_vectors_;
   std::vector<AbsoluteAngle> absolute_pans_;
   std::vector<AbsoluteAngle> absolute_tilts_;
   std::vector<AbsoluteAngle> absolute_rolls_;
