@@ -8,6 +8,7 @@
 
 class RelativePose : public Model<RelativePose, 1, 10> {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   using Error = typename Model<RelativePose, 1, 10>::Error;
   using Type = Eigen::Matrix<double, 3, 4>;
   using Data = std::pair<Eigen::Vector3d, Eigen::Vector3d>;
