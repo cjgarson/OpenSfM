@@ -5,10 +5,6 @@
 #include <Eigen/Geometry>
 #include <Eigen/StdVector>
 
-EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Vector3d)
-EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Matrix3d)
-EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Matrix<double,3,4>)
-
 template <class T>
 using MatX = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
 using MatXf = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>;
