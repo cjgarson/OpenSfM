@@ -30,7 +30,7 @@ AlignedVector<Mat34d> AbsolutePoseThreePoints(
     const Eigen::Matrix<double, -1, 3> &points) {
   // Pack inputs as (bearing, point) pairs for the templated solver.
   const auto n = std::min<Eigen::Index>(bearings.rows(), points.rows());
-  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples;
+  AlignedVector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples;
   samples.reserve(static_cast<size_t>(n));
   for (Eigen::Index i = 0; i < n; ++i) {
     samples.emplace_back(bearings.row(i).normalized(), points.row(i));
@@ -44,7 +44,7 @@ Mat34d AbsolutePoseNPoints(
     const Eigen::Matrix<double, -1, 3> &bearings,
     const Eigen::Matrix<double, -1, 3> &points) {
   const auto n = std::min<Eigen::Index>(bearings.rows(), points.rows());
-  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples;
+  AlignedVector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples;
   samples.reserve(static_cast<size_t>(n));
   for (Eigen::Index i = 0; i < n; ++i) {
     samples.emplace_back(bearings.row(i).normalized(), points.row(i));
@@ -57,7 +57,7 @@ Eigen::Vector3d AbsolutePoseNPointsKnownRotation(
     const Eigen::Matrix<double, -1, 3> &bearings,
     const Eigen::Matrix<double, -1, 3> &points) {
   const auto n = std::min<Eigen::Index>(bearings.rows(), points.rows());
-  std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples;
+  AlignedVector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> samples;
   samples.reserve(static_cast<size_t>(n));
   for (Eigen::Index i = 0; i < n; ++i) {
     samples.emplace_back(bearings.row(i).normalized(), points.row(i));
