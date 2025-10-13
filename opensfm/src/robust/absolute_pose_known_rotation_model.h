@@ -7,6 +7,7 @@
 class AbsolutePoseKnownRotation
     : public Model<AbsolutePoseKnownRotation, 1, 1> {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   using Error = typename Model<AbsolutePoseKnownRotation, 1, 1>::Error;
   using Type = Eigen::Vector3d;
   using Data = std::pair<Eigen::Vector3d, Eigen::Vector3d>;
