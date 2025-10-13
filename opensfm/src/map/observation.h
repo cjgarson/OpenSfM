@@ -6,6 +6,7 @@
 
 namespace sfmmap {
 struct Observation {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   Observation() = default;
   Observation(double x, double y, double s, int r, int g, int b, int feature,
               int segmentation = NO_SEMANTIC_VALUE,
