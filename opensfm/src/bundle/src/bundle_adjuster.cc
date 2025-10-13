@@ -1226,11 +1226,13 @@ RigInstance BundleAdjuster::GetRigInstance(
   return rig_instances_.at(instance_id);
 }
 
-const std::map<std::string, RigCamera>& BundleAdjuster::GetRigCameras() const {
+const bundle::AlignedMap<std::string, bundle::RigCamera>&
+bundle::BundleAdjuster::GetRigCameras() const {
   return rig_cameras_;
 }
 
-const std::map<std::string, RigInstance>& BundleAdjuster::GetRigInstances() const {
+const bundle::AlignedMap<std::string, bundle::RigInstance>&
+bundle::BundleAdjuster::GetRigInstances() const {
   return rig_instances_;
 }
 
