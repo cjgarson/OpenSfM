@@ -8,6 +8,7 @@
 namespace bundle {
 
 struct Pose : public Data<geometry::Pose> {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   // Outputted parametrization : CAM_TO_WORLD is preferred
   enum Parametrization {
     CAM_TO_WORLD = 0,  // x(cam) = Rt*(x(world) - t))
