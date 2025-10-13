@@ -4,6 +4,7 @@
 
 class Line : public Model<Line, 1, 1> {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   using Type = Eigen::Vector2d;
   using Data = Eigen::Vector2d;
   static const int MINIMAL_SAMPLES = 2;
