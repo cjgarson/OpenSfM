@@ -24,6 +24,8 @@
 #include <Eigen/Eigen>
 #include <Eigen/SVD>
 
+EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Matrix3d)
+
 // In the following code, polynomials are expressed as vectors containing
 // their coefficients in the basis of monomials:
 //
