@@ -5,6 +5,7 @@
 
 class Similarity : public Model<Similarity, 1, 1> {
  public:
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   using Type = Eigen::Matrix4d;
   using Data = std::pair<Eigen::Vector3d, Eigen::Vector3d>;
   static const int MINIMAL_SAMPLES = 3;
