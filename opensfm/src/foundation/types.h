@@ -2,6 +2,10 @@
 
 #include <Eigen/Eigen>
 
+#include <vector>
+#include <array>
+EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
 EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Vector3d)
 EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Matrix3d)
 EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Matrix<double,3,4>)
