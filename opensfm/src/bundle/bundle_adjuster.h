@@ -29,6 +29,11 @@ extern "C" {
 
 namespace bundle {
 
+template <typename K, typename V>
+using AlignedMap = std::map<
+    K, V, std::less<K>,
+    Eigen::aligned_allocator<std::pair<const K, V>>>;
+
 struct Reconstruction {
   std::string id;
   std::map<std::string, double> scales;
@@ -279,8 +284,8 @@ class BundleAdjuster {
   bool HasPoint(const std::string &id) const;
   RigCamera GetRigCamera(const std::string &rig_camera_id) const;
   RigInstance GetRigInstance(const std::string &instance_id) const;
-  std::map<std::string, RigCamera> GetRigCameras() const;
-  std::map<std::string, RigInstance> GetRigInstances() const;
+  const AlignedMap<std::string, RigCamera>&   GetRigCameras() const;
+  const AlignedMap<std::string, RigInstance>& GetRigInstances() const;
 
   // Minimization details
   std::string BriefReport() const;
@@ -296,23 +301,12 @@ class BundleAdjuster {
   std::map<std::string, Reconstruction> reconstructions_;
   std::map<std::string, std::string> reconstructions_assignments_;
 
-  std::map<std::string, Camera,      std::less<std::string>,
-           Eigen::aligned_allocator<std::pair<const std::string, Camera>>>      cameras_;
-  
-  std::map<std::string, Similarity,  std::less<std::string>,
-           Eigen::aligned_allocator<std::pair<const std::string, Similarity>>>  bias_;
-  
-  std::map<std::string, Shot,        std::less<std::string>,
-           Eigen::aligned_allocator<std::pair<const std::string, Shot>>>        shots_;
-  
-  std::map<std::string, Point,       std::less<std::string>,
-           Eigen::aligned_allocator<std::pair<const std::string, Point>>>       points_;
-  
-  std::map<std::string, RigCamera,   std::less<std::string>,
-           Eigen::aligned_allocator<std::pair<const std::string, RigCamera>>>   rig_cameras_;
-  
-  std::map<std::string, RigInstance, std::less<std::string>,
-           Eigen::aligned_allocator<std::pair<const std::string, RigInstance>>> rig_instances_;
+  AlignedMap<std::string, Camera>      cameras_;
+  AlignedMap<std::string, Similarity>  bias_;
+  AlignedMap<std::string, Shot>        shots_;
+  AlignedMap<std::string, Point>       points_;
+  AlignedMap<std::string, RigCamera>   rig_cameras_;
+  AlignedMap<std::string, RigInstance> rig_instances_;
 
 
   bool use_analytic_{false};
