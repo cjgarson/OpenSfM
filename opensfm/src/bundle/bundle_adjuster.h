@@ -9,6 +9,7 @@
 #include <foundation/optional.h>
 #include <geometry/camera.h>
 #include <geometry/pose.h>
+#include <Eigen/StdVector>
 
 #include <cmath>
 #include <cstdio>
@@ -56,6 +57,7 @@ struct Reconstruction {
 };
 
 struct PointProjectionObservation {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   Vec2d coordinates;
   Point *point;
   Shot *shot;
@@ -64,6 +66,7 @@ struct PointProjectionObservation {
 };
 
 struct RelativeMotion {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   RelativeMotion(const std::string &rig_instance_i,
                  const std::string &rig_instance_j, const Vec3d &rotation,
                  const Vec3d &translation, double scale,
@@ -95,6 +98,7 @@ struct RelativeMotion {
 };
 
 struct RelativeRotation {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   RelativeRotation(const std::string &shot_i, const std::string &shot_j,
                    const Vec3d &r) {
     shot_id_i = shot_i;
@@ -141,6 +145,7 @@ struct AbsolutePositionHeatmap {
 };
 
 struct AbsoluteUpVector {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   std::string shot_id;
   Vec3d up_vector;
   double std_deviation;
@@ -287,31 +292,46 @@ class BundleAdjuster {
   geometry::Pose GetDefaultRigPoseSigma() const;
 
   // minimized data
-  std::map<std::string, Camera> cameras_;
-  std::map<std::string, Similarity> bias_;
-  std::map<std::string, Shot> shots_;
+
   std::map<std::string, Reconstruction> reconstructions_;
   std::map<std::string, std::string> reconstructions_assignments_;
-  std::map<std::string, Point> points_;
-  std::map<std::string, RigCamera> rig_cameras_;
-  std::map<std::string, RigInstance> rig_instances_;
+
+  std::map<std::string, Camera,      std::less<std::string>,
+           Eigen::aligned_allocator<std::pair<const std::string, Camera>>>      cameras_;
+  
+  std::map<std::string, Similarity,  std::less<std::string>,
+           Eigen::aligned_allocator<std::pair<const std::string, Similarity>>>  bias_;
+  
+  std::map<std::string, Shot,        std::less<std::string>,
+           Eigen::aligned_allocator<std::pair<const std::string, Shot>>>        shots_;
+  
+  std::map<std::string, Point,       std::less<std::string>,
+           Eigen::aligned_allocator<std::pair<const std::string, Point>>>       points_;
+  
+  std::map<std::string, RigCamera,   std::less<std::string>,
+           Eigen::aligned_allocator<std::pair<const std::string, RigCamera>>>   rig_cameras_;
+  
+  std::map<std::string, RigInstance, std::less<std::string>,
+           Eigen::aligned_allocator<std::pair<const std::string, RigInstance>>> rig_instances_;
+
 
   bool use_analytic_{false};
 
   // minimization constraints
 
   // reprojection observation
-  std::vector<PointProjectionObservation> point_projection_observations_;
+  std::vector<PointProjectionObservation, Eigen::aligned_allocator<PointProjectionObservation>>
+      point_projection_observations_;
   std::map<std::string, std::shared_ptr<HeatmapInterpolator>> heatmaps_;
 
   // relative motion between shots
-  std::vector<RelativeMotion> relative_motions_;
-  std::vector<RelativeRotation> relative_rotations_;
+  std::vector<RelativeMotion,   Eigen::aligned_allocator<RelativeMotion>>   relative_motions_;
+  std::vector<RelativeRotation, Eigen::aligned_allocator<RelativeRotation>> relative_rotations_;
   std::vector<CommonPosition> common_positions_;
 
   // shots absolute positions
   std::vector<AbsolutePositionHeatmap> absolute_positions_heatmaps_;
-  std::vector<AbsoluteUpVector> absolute_up_vectors_;
+  std::vector<AbsoluteUpVector, Eigen::aligned_allocator<AbsoluteUpVector>> absolute_up_vectors_;
   std::vector<AbsoluteAngle> absolute_pans_;
   std::vector<AbsoluteAngle> absolute_tilts_;
   std::vector<AbsoluteAngle> absolute_rolls_;
