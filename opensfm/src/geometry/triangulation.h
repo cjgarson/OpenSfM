@@ -85,7 +85,7 @@ std::pair<bool, Eigen::Matrix<T, 3, 1>> TriangulateTwoBearingsMidpointSolve(
   return std::make_pair(true, (x1 + x2) / T(2.0));
 };
 
-std::vector<std::pair<bool, Eigen::Vector3d>>
+AlignedVector<std::pair<bool, Eigen::Vector3d>>
 TriangulateTwoBearingsMidpointMany(
     const Eigen::Matrix<double, Eigen::Dynamic, 3> &bearings1,
     const Eigen::Matrix<double, Eigen::Dynamic, 3> &bearings2,
