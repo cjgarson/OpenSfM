@@ -781,12 +781,12 @@ py::dict BAHelpers::BundleShotPoses(
   
   const auto t_setup = std::chrono::high_resolution_clock::now();
   
-  if (shot_ids.size() <= 1) {
+/*  if (shot_ids.size() <= 1) {
       report["brief_report"] = "Skipped pose-only BA (single shot)";
       report["num_shots"] = static_cast<int>(shot_ids.size());
       report["map_shots"] = static_cast<int>(map.GetShots().size());
       return report;
-  }
+  }*/
   
   { py::gil_scoped_release release; ba.Run(); }
   const auto t_run   = std::chrono::high_resolution_clock::now();
