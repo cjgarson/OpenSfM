@@ -757,7 +757,7 @@ py::dict BAHelpers::BundleShotPoses(
     }
   }
 
-/*
+
   ba.SetPointProjectionLossFunction(
       config["loss_function"].cast<std::string>(),
       config["loss_function_threshold"].cast<double>());
