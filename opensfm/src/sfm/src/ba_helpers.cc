@@ -1,4 +1,5 @@
 // src/sfm/src/ba_helpers.cc
+// replacement file from Last Oct 13 commit for testing
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -757,7 +758,6 @@ py::dict BAHelpers::BundleShotPoses(
     }
   }
 
-
   ba.SetPointProjectionLossFunction(
       config["loss_function"].cast<std::string>(),
       config["loss_function_threshold"].cast<double>());
@@ -774,20 +774,11 @@ py::dict BAHelpers::BundleShotPoses(
       config["rig_translation_sd"].cast<double>(),
       config["rig_rotation_sd"].cast<double>());
 
-  ba.SetNumThreads(16); //cg
-  ba.SetMaxNumIterations(7);
-  ba.SetLinearSolverType("DENSE_QR"); //cg
+  ba.SetNumThreads(config["processes"].cast<int>());
+  ba.SetMaxNumIterations(10);
+  ba.SetLinearSolverType("DENSE_QR");
 
-  
   const auto t_setup = std::chrono::high_resolution_clock::now();
-  
-/*  if (shot_ids.size() <= 1) {
-      report["brief_report"] = "Skipped pose-only BA (single shot)";
-      report["num_shots"] = static_cast<int>(shot_ids.size());
-      report["map_shots"] = static_cast<int>(map.GetShots().size());
-      return report;
-  } */
-  
   { py::gil_scoped_release release; ba.Run(); }
   const auto t_run   = std::chrono::high_resolution_clock::now();
 
@@ -798,7 +789,6 @@ py::dict BAHelpers::BundleShotPoses(
   }
 
   const auto t_done = std::chrono::high_resolution_clock::now();
-  
   report["brief_report"]            = ba.BriefReport();
   report["wall_times"]              = py::dict();
   report["wall_times"]["setup"]     = std::chrono::duration_cast<std::chrono::microseconds>(t_setup - t0).count() / 1e6;
